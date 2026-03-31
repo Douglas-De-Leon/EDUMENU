@@ -1,0 +1,5 @@
+{
+  "name": "EduMenu - Sistema de Merenda Escolar",
+  "description": "Um sistema moderno para gestão e escolha de merenda escolar, permitindo que alunos registrem sua presença e prefência de refeição diária com insights nutricionais gerados por IA.",
+  "requestFramePermissions": []
+}
