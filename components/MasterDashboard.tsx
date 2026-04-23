@@ -3,10 +3,11 @@ import { AdminUser } from '../types';
 
 interface MasterDashboardProps {
   admins: AdminUser[];
-  onUpdateAdmins: (admins: AdminUser[]) => void;
+  onAddAdmin: (admin: AdminUser) => void;
+  onDeleteAdmin: (id: string) => void;
 }
 
-export const MasterDashboard: React.FC<MasterDashboardProps> = ({ admins, onUpdateAdmins }) => {
+export const MasterDashboard: React.FC<MasterDashboardProps> = ({ admins, onAddAdmin, onDeleteAdmin }) => {
   const [newAdmin, setNewAdmin] = useState<AdminUser>({ id: '', login: '', name: '', password: '' });
 
   const handleAdd = (e: React.FormEvent) => {
@@ -18,13 +19,13 @@ export const MasterDashboard: React.FC<MasterDashboardProps> = ({ admins, onUpda
       return;
     }
 
-    onUpdateAdmins([...admins, { ...newAdmin, id: Date.now().toString() }]);
+    onAddAdmin({ ...newAdmin, id: Date.now().toString() });
     setNewAdmin({ id: '', login: '', name: '', password: '' });
   };
 
   const handleDelete = (id: string) => {
     if (window.confirm('Deseja realmente excluir este gestor?')) {
-      onUpdateAdmins(admins.filter(a => a.id !== id));
+      onDeleteAdmin(id);
     }
   };
 

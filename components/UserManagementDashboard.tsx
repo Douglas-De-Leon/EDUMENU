@@ -3,12 +3,16 @@ import { Student } from '../types';
 
 interface UserManagementDashboardProps {
   students: Student[];
-  onUpdateStudents: (students: Student[]) => void;
+  onAddStudent: (student: Student) => void;
+  onUpdateStudent: (student: Student) => void;
+  onDeleteStudent: (matricula: string) => void;
 }
 
 export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = ({
   students,
-  onUpdateStudents
+  onAddStudent,
+  onUpdateStudent,
+  onDeleteStudent
 }) => {
   const [newStudent, setNewStudent] = useState<Student>({ matricula: '', name: '', password: '' });
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
@@ -33,17 +37,15 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
       return;
     }
 
-    onUpdateStudents([...students, newStudent]);
+    onAddStudent(newStudent);
     setNewStudent({ matricula: '', name: '', password: '' });
   };
 
-  const handleUpdateStudent = (e: React.FormEvent) => {
+  const handleUpdateStudentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStudent || !editingStudent.name) return;
 
-    onUpdateStudents(students.map(s => 
-      s.matricula === editingStudent.matricula ? editingStudent : s
-    ));
+    onUpdateStudent(editingStudent);
     setEditingStudent(null);
     setNewStudent({ matricula: '', name: '', password: '' }); // Clear any partial new student data
   };
@@ -52,9 +54,9 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
     setStudentToDelete(matricula);
   };
 
-  const handleDeleteStudent = () => {
+  const handleDeleteStudentSubmit = () => {
     if (studentToDelete) {
-      onUpdateStudents(students.filter(s => s.matricula !== studentToDelete));
+      onDeleteStudent(studentToDelete);
       if (editingStudent?.matricula === studentToDelete) {
         setEditingStudent(null);
       }
@@ -77,7 +79,7 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
             {editingStudent ? 'Editar Aluno' : 'Cadastrar Novo Aluno'}
           </h3>
           
-          <form onSubmit={editingStudent ? handleUpdateStudent : handleAddStudent} className="space-y-4">
+          <form onSubmit={editingStudent ? handleUpdateStudentSubmit : handleAddStudent} className="space-y-4">
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Matrícula</label>
               <input 
@@ -234,7 +236,7 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
                 Cancelar
               </button>
               <button 
-                onClick={handleDeleteStudent}
+                onClick={handleDeleteStudentSubmit}
                 className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-red-200 transition-all active:scale-95"
               >
                 Sim, Excluir

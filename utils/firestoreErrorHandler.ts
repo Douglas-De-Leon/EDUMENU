@@ -48,5 +48,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
+  const message = error instanceof Error ? error.message : String(error);
+  alert("Erro ao tentar salvar no banco de dados. Verifique sua conexão e tente novamente. Detalhes: " + message);
   throw new Error(JSON.stringify(errInfo));
 }

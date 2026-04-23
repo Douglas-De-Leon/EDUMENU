@@ -9,14 +9,18 @@ import { Selection, MealOption, Student } from '../types';
 interface AdminDashboardProps {
   selections: Selection[];
   mealOptions: MealOption[];
-  onUpdateMeals: (meals: MealOption[]) => void;
+  onAddMeal: (meal: MealOption) => void;
+  onUpdateMeal: (meal: MealOption) => void;
+  onDeleteMeal: (id: string) => void;
   students: Student[];
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
   selections, 
   mealOptions, 
-  onUpdateMeals,
+  onAddMeal,
+  onUpdateMeal,
+  onDeleteMeal,
   students 
 }) => {
   const [newMeal, setNewMeal] = useState<Partial<MealOption>>({
@@ -64,12 +68,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       active: true
     };
 
-    onUpdateMeals([...mealOptions, mealToAdd]);
+    onAddMeal(mealToAdd);
     setNewMeal({ category: 'Padrao', active: true });
   };
 
   const toggleMealStatus = (id: string) => {
-    onUpdateMeals(mealOptions.map(m => m.id === id ? { ...m, active: !m.active } : m));
+    const targetMeal = mealOptions.find(m => m.id === id);
+    if (targetMeal) {
+      onUpdateMeal({ ...targetMeal, active: !targetMeal.active });
+    }
   };
 
   const confirmDeleteMeal = (id: string) => {
@@ -78,7 +85,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const executeDeleteMeal = () => {
     if (mealToDelete) {
-      onUpdateMeals(mealOptions.filter(m => m.id !== mealToDelete));
+      onDeleteMeal(mealToDelete);
       setMealToDelete(null);
     }
   };

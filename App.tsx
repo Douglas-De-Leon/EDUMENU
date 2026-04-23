@@ -156,66 +156,67 @@ const App: React.FC = () => {
     setLoading(false);
   };
 
-  const handleUpdateMeals = async (newMeals: MealOption[]) => {
-    // Find deleted meals
-    const deletedMeals = mealOptions.filter(m => !newMeals.find(nm => nm.id === m.id));
-    for (const meal of deletedMeals) {
-      try {
-        await deleteDoc(doc(db, 'meals', meal.id));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, `meals/${meal.id}`);
-      }
-    }
-
-    // Update or add meals
-    for (const meal of newMeals) {
-      try {
-        await setDoc(doc(db, 'meals', meal.id), meal);
-      } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `meals/${meal.id}`);
-      }
+  const handleAddMeal = async (meal: MealOption) => {
+    try {
+      await setDoc(doc(db, 'meals', meal.id), meal);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `meals/${meal.id}`);
     }
   };
 
-  const handleUpdateStudents = async (newStudents: Student[]) => {
-    // Find deleted students
-    const deletedStudents = registeredStudents.filter(s => !newStudents.find(ns => ns.matricula === s.matricula));
-    for (const student of deletedStudents) {
-      try {
-        await deleteDoc(doc(db, 'students', student.matricula));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, `students/${student.matricula}`);
-      }
-    }
-
-    // Update or add students
-    for (const student of newStudents) {
-      try {
-        await setDoc(doc(db, 'students', student.matricula), student);
-      } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `students/${student.matricula}`);
-      }
+  const handleUpdateMeal = async (meal: MealOption) => {
+    try {
+      await setDoc(doc(db, 'meals', meal.id), meal);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `meals/${meal.id}`);
     }
   };
 
-  const handleUpdateAdmins = async (newAdmins: AdminUser[]) => {
-    // Find deleted admins
-    const deletedAdmins = adminUsers.filter(a => !newAdmins.find(na => na.id === a.id));
-    for (const admin of deletedAdmins) {
-      try {
-        await deleteDoc(doc(db, 'admins', admin.id));
-      } catch (error) {
-        handleFirestoreError(error, OperationType.DELETE, `admins/${admin.id}`);
-      }
+  const handleDeleteMeal = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'meals', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `meals/${id}`);
     }
+  };
 
-    // Update or add admins
-    for (const admin of newAdmins) {
-      try {
-        await setDoc(doc(db, 'admins', admin.id), admin);
-      } catch (error) {
-        handleFirestoreError(error, OperationType.WRITE, `admins/${admin.id}`);
-      }
+  const handleAddStudent = async (student: Student) => {
+    try {
+      await setDoc(doc(db, 'students', student.matricula), student);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `students/${student.matricula}`);
+    }
+  };
+
+  const handleUpdateStudent = async (student: Student) => {
+    try {
+      await setDoc(doc(db, 'students', student.matricula), student);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `students/${student.matricula}`);
+    }
+  };
+
+  const handleDeleteStudent = async (matricula: string) => {
+    try {
+      await deleteDoc(doc(db, 'students', matricula));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `students/${matricula}`);
+    }
+  };
+
+  const handleAddAdmin = async (admin: AdminUser) => {
+    try {
+      await setDoc(doc(db, 'admins', admin.id), admin);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `admins/${admin.id}`);
+    }
+  };
+
+  const handleDeleteAdmin = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'admins', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `admins/${id}`);
     }
   };
 
@@ -418,20 +419,25 @@ const App: React.FC = () => {
         {userRole === 'master' ? (
           <MasterDashboard 
             admins={adminUsers}
-            onUpdateAdmins={handleUpdateAdmins}
+            onAddAdmin={handleAddAdmin}
+            onDeleteAdmin={handleDeleteAdmin}
           />
         ) : userRole === 'admin' ? (
           view === 'admin' ? (
             <AdminDashboard 
               selections={selections} 
               mealOptions={mealOptions} 
-              onUpdateMeals={handleUpdateMeals}
+              onAddMeal={handleAddMeal}
+              onUpdateMeal={handleUpdateMeal}
+              onDeleteMeal={handleDeleteMeal}
               students={registeredStudents}
             />
           ) : (
             <UserManagementDashboard 
               students={registeredStudents}
-              onUpdateStudents={handleUpdateStudents}
+              onAddStudent={handleAddStudent}
+              onUpdateStudent={handleUpdateStudent}
+              onDeleteStudent={handleDeleteStudent}
             />
           )
         ) : (
