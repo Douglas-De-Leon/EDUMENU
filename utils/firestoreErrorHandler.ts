@@ -47,8 +47,17 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  const message = error instanceof Error ? error.message : String(error);
-  alert("Erro ao tentar salvar no banco de dados. Verifique sua conexão e tente novamente. Detalhes: " + message);
-  throw new Error(JSON.stringify(errInfo));
+  
+  const isPermissionListError = operationType === OperationType.LIST && errInfo.error.includes('permission');
+
+  if (!isPermissionListError) {
+    console.error('Firestore Error: \n' + JSON.stringify(errInfo));
+  }
+  
+  // Do not crash the app entirely or spam alerts on background LIST operations
+  if (operationType !== OperationType.LIST) {
+    const message = error instanceof Error ? error.message : String(error);
+    alert("Erro ao tentar acessar o banco de dados. Detalhes: " + message);
+    throw new Error(JSON.stringify(errInfo));
+  }
 }

@@ -47,6 +47,9 @@ const App: React.FC = () => {
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'students');
+      if (error.message?.includes('permission')) {
+        setError('Acesso negado ao Firebase: Leia as instruções do assistente para alterar as Regras de Segurança do Firestore.');
+      }
     });
 
     const unsubAdmins = onSnapshot(collection(db, 'admins'), (snapshot) => {
@@ -57,6 +60,9 @@ const App: React.FC = () => {
       setAdminUsers(adminsData);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'admins');
+      if (error.message?.includes('permission')) {
+        setError('Acesso negado ao Firebase: Leia as instruções do assistente para alterar as Regras de Segurança do Firestore.');
+      }
     });
 
     const unsubMeals = onSnapshot(collection(db, 'meals'), (snapshot) => {
@@ -74,6 +80,9 @@ const App: React.FC = () => {
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'meals');
+      if (error.message?.includes('permission')) {
+        setError('Acesso negado ao Firebase: Leia as instruções do assistente para alterar as Regras de Segurança do Firestore.');
+      }
     });
 
     const unsubSelections = onSnapshot(collection(db, 'selections'), (snapshot) => {
@@ -84,6 +93,9 @@ const App: React.FC = () => {
       setSelections(selectionsData);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'selections');
+      if (error.message?.includes('permission')) {
+        setError('Acesso negado ao Firebase: Leia as instruções do assistente para alterar as Regras de Segurança do Firestore.');
+      }
     });
 
     return () => {
@@ -282,6 +294,16 @@ const App: React.FC = () => {
               {loginStep === 'role_selection' ? 'Selecione seu perfil de acesso para continuar.' : 'Faça login para acessar o sistema.'}
             </p>
           </div>
+
+          {error && error.includes('Firebase') && (
+            <div className="max-w-2xl mx-auto mb-8 bg-red-100 border border-red-300 text-red-800 px-6 py-4 rounded-2xl shadow-sm flex items-start gap-4">
+               <i className="fas fa-exclamation-triangle mt-1 text-red-600 text-2xl"></i>
+               <div>
+                  <h4 className="font-bold text-red-900 text-lg">Erro de Banco de Dados</h4>
+                  <p className="text-sm mt-1 leading-relaxed">{error}</p>
+               </div>
+            </div>
+          )}
           
           {loginStep === 'role_selection' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl px-4">
