@@ -8,6 +8,9 @@ import { MasterDashboard } from './components/MasterDashboard';
 import { Student, Selection, MealOption, AdminUser } from './types';
 import { MEAL_OPTIONS, INITIAL_STUDENTS } from './constants';
 import { getNutritionalTip, getDailyStatsInsight } from './services/geminiService';
+import { db } from './firebase';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, getDoc, getDocs } from 'firebase/firestore';
+import { handleFirestoreError, OperationType } from './utils/firestoreErrorHandler';
 
 const App: React.FC = () => {
   const [userRole, setUserRole] = useState<'student' | 'admin' | 'master' | null>(null);
@@ -27,35 +30,73 @@ const App: React.FC = () => {
   const [insight, setInsight] = useState<string>('');
   const [loading, setLoading] = useState(false);
 
-  // Persistence (Mock DB)
+  // Persistence (Firestore)
   useEffect(() => {
-    const savedStudents = localStorage.getItem('edumenu_students');
-    const savedSelections = localStorage.getItem('edumenu_selections');
-    const savedMeals = localStorage.getItem('edumenu_meals');
-    const savedAdmins = localStorage.getItem('edumenu_admins');
-    
-    if (savedStudents) setRegisteredStudents(JSON.parse(savedStudents));
-    if (savedSelections) setSelections(JSON.parse(savedSelections));
-    if (savedMeals) setMealOptions(JSON.parse(savedMeals));
-    if (savedAdmins) setAdminUsers(JSON.parse(savedAdmins));
+    const unsubStudents = onSnapshot(collection(db, 'students'), (snapshot) => {
+      const studentsData: Student[] = [];
+      snapshot.forEach((doc) => {
+        studentsData.push(doc.data() as Student);
+      });
+      if (studentsData.length > 0) {
+        setRegisteredStudents(studentsData);
+      } else {
+        // Initialize with default if empty
+        INITIAL_STUDENTS.forEach(student => {
+          setDoc(doc(db, 'students', student.matricula), student).catch(e => handleFirestoreError(e, OperationType.CREATE, 'students'));
+        });
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'students');
+    });
+
+    const unsubAdmins = onSnapshot(collection(db, 'admins'), (snapshot) => {
+      const adminsData: AdminUser[] = [];
+      snapshot.forEach((doc) => {
+        adminsData.push(doc.data() as AdminUser);
+      });
+      setAdminUsers(adminsData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'admins');
+    });
+
+    const unsubMeals = onSnapshot(collection(db, 'meals'), (snapshot) => {
+      const mealsData: MealOption[] = [];
+      snapshot.forEach((doc) => {
+        mealsData.push(doc.data() as MealOption);
+      });
+      if (mealsData.length > 0) {
+        setMealOptions(mealsData);
+      } else {
+        // Initialize with default if empty
+        MEAL_OPTIONS.forEach(meal => {
+          setDoc(doc(db, 'meals', meal.id), meal).catch(e => handleFirestoreError(e, OperationType.CREATE, 'meals'));
+        });
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'meals');
+    });
+
+    const unsubSelections = onSnapshot(collection(db, 'selections'), (snapshot) => {
+      const selectionsData: Selection[] = [];
+      snapshot.forEach((doc) => {
+        selectionsData.push(doc.data() as Selection);
+      });
+      setSelections(selectionsData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'selections');
+    });
+
+    return () => {
+      unsubStudents();
+      unsubAdmins();
+      unsubMeals();
+      unsubSelections();
+    };
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('edumenu_students', JSON.stringify(registeredStudents));
-  }, [registeredStudents]);
-
-  useEffect(() => {
-    localStorage.setItem('edumenu_admins', JSON.stringify(adminUsers));
-  }, [adminUsers]);
-
-  useEffect(() => {
-    localStorage.setItem('edumenu_selections', JSON.stringify(selections));
     updateInsight();
   }, [selections]);
-
-  useEffect(() => {
-    localStorage.setItem('edumenu_meals', JSON.stringify(mealOptions));
-  }, [mealOptions]);
 
   const updateInsight = async () => {
     if (selections.length > 0) {
@@ -115,7 +156,70 @@ const App: React.FC = () => {
     setLoading(false);
   };
 
-  const confirmSelection = () => {
+  const handleUpdateMeals = async (newMeals: MealOption[]) => {
+    // Find deleted meals
+    const deletedMeals = mealOptions.filter(m => !newMeals.find(nm => nm.id === m.id));
+    for (const meal of deletedMeals) {
+      try {
+        await deleteDoc(doc(db, 'meals', meal.id));
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, `meals/${meal.id}`);
+      }
+    }
+
+    // Update or add meals
+    for (const meal of newMeals) {
+      try {
+        await setDoc(doc(db, 'meals', meal.id), meal);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `meals/${meal.id}`);
+      }
+    }
+  };
+
+  const handleUpdateStudents = async (newStudents: Student[]) => {
+    // Find deleted students
+    const deletedStudents = registeredStudents.filter(s => !newStudents.find(ns => ns.matricula === s.matricula));
+    for (const student of deletedStudents) {
+      try {
+        await deleteDoc(doc(db, 'students', student.matricula));
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, `students/${student.matricula}`);
+      }
+    }
+
+    // Update or add students
+    for (const student of newStudents) {
+      try {
+        await setDoc(doc(db, 'students', student.matricula), student);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `students/${student.matricula}`);
+      }
+    }
+  };
+
+  const handleUpdateAdmins = async (newAdmins: AdminUser[]) => {
+    // Find deleted admins
+    const deletedAdmins = adminUsers.filter(a => !newAdmins.find(na => na.id === a.id));
+    for (const admin of deletedAdmins) {
+      try {
+        await deleteDoc(doc(db, 'admins', admin.id));
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, `admins/${admin.id}`);
+      }
+    }
+
+    // Update or add admins
+    for (const admin of newAdmins) {
+      try {
+        await setDoc(doc(db, 'admins', admin.id), admin);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, `admins/${admin.id}`);
+      }
+    }
+  };
+
+  const confirmSelection = async () => {
     if (!currentStudent || !selectedMealId) return;
 
     const today = new Date().toISOString().split('T')[0];
@@ -131,7 +235,11 @@ const App: React.FC = () => {
       timestamp: new Date().toISOString()
     };
 
-    setSelections(prev => [...prev, newSelection]);
+    try {
+      await setDoc(doc(db, 'selections', `${newSelection.matricula}_${newSelection.timestamp}`), newSelection);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'selections');
+    }
   };
 
   const logout = () => {
@@ -310,20 +418,20 @@ const App: React.FC = () => {
         {userRole === 'master' ? (
           <MasterDashboard 
             admins={adminUsers}
-            onUpdateAdmins={setAdminUsers}
+            onUpdateAdmins={handleUpdateAdmins}
           />
         ) : userRole === 'admin' ? (
           view === 'admin' ? (
             <AdminDashboard 
               selections={selections} 
               mealOptions={mealOptions} 
-              onUpdateMeals={setMealOptions}
+              onUpdateMeals={handleUpdateMeals}
               students={registeredStudents}
             />
           ) : (
             <UserManagementDashboard 
               students={registeredStudents}
-              onUpdateStudents={setRegisteredStudents}
+              onUpdateStudents={handleUpdateStudents}
             />
           )
         ) : (
