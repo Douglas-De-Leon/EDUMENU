@@ -11,8 +11,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <header className="bg-indigo-600 text-white shadow-lg sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center space-x-2">
-            <i className="fas fa-utensils text-2xl"></i>
-            <h1 className="text-xl font-bold tracking-tight">EduMenu</h1>
+            <i className="fas fa-ticket-alt text-2xl rotate-[-15deg] inline-block text-amber-300"></i>
+            <h1 className="text-xl font-bold tracking-tight">EDUVOTAÇÃO</h1>
           </div>
           <div className="text-sm font-medium opacity-90 hidden sm:block">
             Portal da Merenda Escolar
@@ -26,7 +26,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       <footer className="bg-white border-t border-slate-200 py-6">
         <div className="container mx-auto px-4 text-center text-slate-500 text-sm">
-          &copy; {new Date().getFullYear()} EduMenu. Sistema de Gestão de Refeitório.
+          &copy; {new Date().getFullYear()} EDUVOTAÇÃO. Sistema de Gestão de Refeitório.
         </div>
       </footer>
     </div>

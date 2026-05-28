@@ -289,7 +289,7 @@ const App: React.FC = () => {
       <Layout>
         <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-12 animate-fadeIn py-20">
           <div className="text-center space-y-4">
-            <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight sm:text-5xl">Bem-vindo ao EduMenu</h2>
+            <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight sm:text-5xl">Bem-vindo ao EDUVOTAÇÃO</h2>
             <p className="text-slate-500 text-lg max-w-2xl mx-auto">
               {loginStep === 'role_selection' ? 'Selecione seu perfil de acesso para continuar.' : 'Faça login para acessar o sistema.'}
             </p>
@@ -467,9 +467,9 @@ const App: React.FC = () => {
             {/* Header Section */}
             <div className="text-center space-y-3">
               <div className="inline-block bg-indigo-100 text-indigo-700 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-2">
-                Sistema de Merenda
+                Sistema de Votação
               </div>
-              <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight sm:text-5xl">EduMenu Escolar</h2>
+              <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight sm:text-5xl">EDUVOTAÇÃO</h2>
               <p className="text-slate-500 max-w-xl mx-auto text-lg">
                 Registre sua presença no almoço para garantir uma alimentação equilibrada e sem desperdícios.
               </p>
@@ -559,7 +559,7 @@ const App: React.FC = () => {
                       {selectedMealId && (
                         <div className="bg-slate-900 p-8 rounded-3xl text-white shadow-2xl animate-fadeIn space-y-6 relative overflow-hidden">
                           <div className="absolute top-0 right-0 p-8 opacity-10">
-                            <i className="fas fa-utensils text-8xl -rotate-12"></i>
+                            <i className="fas fa-ticket-alt text-8xl -rotate-12 text-slate-800"></i>
                           </div>
                           
                           <div className="space-y-4 relative z-10">
