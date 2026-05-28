@@ -163,8 +163,8 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-slate-100">
-            <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto rounded-xl border border-slate-100 whitespace-nowrap sm:whitespace-normal">
+            <table className="w-full text-left border-collapse min-w-[500px]">
               <thead className="bg-slate-50">
                 <tr>
                   <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Matrícula</th>

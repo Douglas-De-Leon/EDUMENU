@@ -193,7 +193,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Categoria</label>
-              <div className="flex gap-4">
+              <div className="flex flex-wrap gap-4">
                 {['Padrao', 'Vegetariana', 'Especial'].map(cat => (
                   <label key={cat} className="flex items-center gap-2 cursor-pointer">
                     <input 

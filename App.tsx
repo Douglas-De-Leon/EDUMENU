@@ -414,9 +414,9 @@ const App: React.FC = () => {
       <div className="max-w-7xl mx-auto space-y-8 animate-fadeIn pb-20">
         
         {/* Header with Role Info and Logout */}
-        <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-          <div className="flex items-center gap-3">
-             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${userRole === 'student' ? 'bg-indigo-100 text-indigo-600' : userRole === 'master' ? 'bg-purple-100 text-purple-600' : 'bg-amber-100 text-amber-600'}`}>
+        <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100 gap-4">
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+             <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${userRole === 'student' ? 'bg-indigo-100 text-indigo-600' : userRole === 'master' ? 'bg-purple-100 text-purple-600' : 'bg-amber-100 text-amber-600'}`}>
                 <i className={`fas ${userRole === 'student' ? 'fa-user-graduate' : userRole === 'master' ? 'fa-crown' : 'fa-user-shield'}`}></i>
              </div>
              <div>
@@ -426,15 +426,15 @@ const App: React.FC = () => {
           </div>
           
           {userRole === 'admin' && (
-            <div className="flex bg-slate-100 p-1 rounded-xl">
-               <button onClick={() => setView('admin')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${view === 'admin' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}>Cozinha</button>
-               <button onClick={() => setView('users')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${view === 'users' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}>Usuários</button>
+            <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:w-auto overflow-x-auto">
+               <button onClick={() => setView('admin')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${view === 'admin' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}>Cozinha</button>
+               <button onClick={() => setView('users')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${view === 'users' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}>Usuários</button>
             </div>
           )}
 
-          <button onClick={handleExit} className="text-slate-400 hover:text-red-500 transition-colors px-4 py-2 font-medium text-sm flex items-center gap-2">
+          <button onClick={handleExit} className="text-slate-400 hover:text-red-500 transition-colors px-4 py-2 font-medium text-sm flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-start">
              <i className="fas fa-sign-out-alt"></i>
-             <span className="hidden sm:inline">Sair</span>
+             <span>Sair</span>
           </button>
         </div>
 
