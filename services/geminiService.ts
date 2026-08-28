@@ -1,30 +1,37 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+const ai = new GoogleGenAI({ 
+  apiKey: process.env.GEMINI_API_KEY || process.env.API_KEY || '',
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+});
 
 export const getNutritionalTip = async (mealName: string): Promise<string> => {
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Dê uma dica nutricional curta (máximo 150 caracteres) em português sobre a refeição: ${mealName}. Foco em estudantes.`,
+      model: 'gemini-3.5-flash',
+      contents: `Gere uma análise muito curta, neutra, de no máximo 120 caracteres, estimulando o pensamento crítico do aluno sobre a importância desta proposta ou escolha: "${mealName}". Foco em ambiente escolar e engajamento cidadão.`,
     });
-    return response.text || "Uma alimentação balanceada é a chave para o bom desempenho escolar!";
+    return response.text?.trim() || "Avalie o impacto dessa decisão no dia a dia da nossa comunidade escolar!";
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "Mantenha-se hidratado durante o dia!";
+    return "Reflita sobre como essa opção pode contribuir para o bem-estar coletivo!";
   }
 };
 
 export const getDailyStatsInsight = async (totalStudents: number, choices: any): Promise<string> => {
   try {
-    const prompt = `Analise os dados de merenda escolar de hoje: ${totalStudents} alunos confirmaram. Escolhas: ${JSON.stringify(choices)}. Gere uma frase motivadora sobre o combate ao desperdício e alimentação saudável.`;
+    const prompt = `Analise a participação da votação escolar hoje: ${totalStudents} eleitores votaram. Dados de escolhas: ${JSON.stringify(choices)}. Escreva uma frase inspiradora e dinâmica sobre cidadania estudantil e o papel da liderança escolar. Máximo 150 caracteres.`;
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.5-flash',
       contents: prompt,
     });
-    return response.text || "Obrigado por ajudar a planejar nossa cozinha!";
+    return response.text?.trim() || "A democracia na escola fortalece e prepara as lideranças de amanhã!";
   } catch (error) {
-    return "Cada escolha consciente reduz o desperdício na nossa escola.";
+    return "Votar é o primeiro passo para construir a escola que nós queremos!";
   }
 };

@@ -15,7 +15,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <h1 className="text-xl font-bold tracking-tight">EDUVOTAÇÃO</h1>
           </div>
           <div className="text-sm font-medium opacity-90 hidden sm:block">
-            Portal da Merenda Escolar
+            Portal de Votação Estudantil
           </div>
         </div>
       </header>
@@ -26,7 +26,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       <footer className="bg-white border-t border-slate-200 py-6">
         <div className="container mx-auto px-4 text-center text-slate-500 text-sm">
-          &copy; {new Date().getFullYear()} EDUVOTAÇÃO. Sistema de Gestão de Refeitório.
+          &copy; {new Date().getFullYear()} EDUVOTAÇÃO. Portal de Decisão e Participação Escolar.
         </div>
       </footer>
     </div>

@@ -24,6 +24,7 @@ const App: React.FC = () => {
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [selections, setSelections] = useState<Selection[]>([]);
   const [mealOptions, setMealOptions] = useState<MealOption[]>(MEAL_OPTIONS);
+  const [selectedCategory, setSelectedCategory] = useState<'Gremio' | 'Representante' | 'Alimentação' | 'Outros'>('Gremio');
   const [selectedMealId, setSelectedMealId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [aiTip, setAiTip] = useState<string>('');
@@ -35,7 +36,12 @@ const App: React.FC = () => {
     const unsubStudents = onSnapshot(collection(db, 'students'), (snapshot) => {
       const studentsData: Student[] = [];
       snapshot.forEach((doc) => {
-        studentsData.push(doc.data() as Student);
+        const s = doc.data() as Student;
+        studentsData.push({
+          ...s,
+          turno: s.turno || 'Manhã',
+          sala: s.sala || '1º Ano A'
+        });
       });
       if (studentsData.length > 0) {
         setRegisteredStudents(studentsData);
@@ -68,7 +74,11 @@ const App: React.FC = () => {
     const unsubMeals = onSnapshot(collection(db, 'meals'), (snapshot) => {
       const mealsData: MealOption[] = [];
       snapshot.forEach((doc) => {
-        mealsData.push(doc.data() as MealOption);
+        const m = doc.data() as any;
+        mealsData.push({
+          ...m,
+          category: (m.category === 'Padrao' ? 'Gremio' : m.category === 'Vegetariana' ? 'Alimentação' : m.category === 'Especial' ? 'Outros' : m.category) || 'Outros'
+        });
       });
       if (mealsData.length > 0) {
         setMealOptions(mealsData);
@@ -88,7 +98,13 @@ const App: React.FC = () => {
     const unsubSelections = onSnapshot(collection(db, 'selections'), (snapshot) => {
       const selectionsData: Selection[] = [];
       snapshot.forEach((doc) => {
-        selectionsData.push(doc.data() as Selection);
+        const s = doc.data() as any;
+        selectionsData.push({
+          ...s,
+          category: s.category || 'Gremio',
+          turno: s.turno || 'Manhã',
+          sala: s.sala || '1º Ano A'
+        });
       });
       setSelections(selectionsData);
     }, (error) => {
@@ -235,21 +251,27 @@ const App: React.FC = () => {
   const confirmSelection = async () => {
     if (!currentStudent || !selectedMealId) return;
 
-    const today = new Date().toISOString().split('T')[0];
-    const alreadyVoted = selections.some(s => s.matricula === currentStudent.matricula && s.timestamp.startsWith(today));
+    const alreadyVoted = selections.some(
+      s => s.matricula === currentStudent.matricula && s.category === selectedCategory
+    );
     if (alreadyVoted) {
-      setError("Você já registrou sua opção hoje.");
+      setError(`Você já registrou seu voto na categoria ${selectedCategory === 'Gremio' ? 'Grêmio Escolar' : selectedCategory === 'Representante' ? 'Representante de Classe' : selectedCategory === 'Alimentação' ? 'Alimentação / Merenda' : 'Outros'}.`);
       return;
     }
 
     const newSelection: Selection = {
       matricula: currentStudent.matricula,
       mealId: selectedMealId,
-      timestamp: new Date().toISOString()
+      category: selectedCategory,
+      timestamp: new Date().toISOString(),
+      turno: currentStudent.turno || 'Manhã',
+      sala: currentStudent.sala || '1º Ano A'
     };
 
     try {
-      await setDoc(doc(db, 'selections', `${newSelection.matricula}_${newSelection.timestamp}`), newSelection);
+      await setDoc(doc(db, 'selections', `${newSelection.matricula}_${selectedCategory}_${newSelection.timestamp.replace(/[:.]/g, '-')}`), newSelection);
+      setSelectedMealId(null);
+      setAiTip('');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'selections');
     }
@@ -265,11 +287,16 @@ const App: React.FC = () => {
     setLoginStep('role_selection');
   };
 
-  const activeMeals = useMemo(() => mealOptions.filter(m => m.active), [mealOptions]);
+  // Only show active options belonging to the currently selected category
+  const activeMeals = useMemo(() => {
+    return mealOptions.filter(m => m.active && m.category === selectedCategory);
+  }, [mealOptions, selectedCategory]);
+
   const hasAlreadyVoted = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    return selections.some(s => s.matricula === currentStudent?.matricula && s.timestamp.startsWith(today));
-  }, [selections, currentStudent]);
+    return selections.some(
+      s => s.matricula === currentStudent?.matricula && s.category === selectedCategory
+    );
+  }, [selections, currentStudent, selectedCategory]);
 
   const handleRoleSelect = (role: 'student' | 'admin') => {
     setLoginStep(role === 'student' ? 'student_login' : 'admin_login');
@@ -316,7 +343,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="text-center space-y-2">
                   <h3 className="text-2xl font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">Sou Aluno</h3>
-                  <p className="text-slate-500 text-sm">Acesse o portal para registrar sua presença e escolher sua refeição.</p>
+                  <p className="text-slate-500 text-sm">Acesse o portal para exercer sua cidadania e votar nas opções vigentes.</p>
                 </div>
               </button>
 
@@ -329,7 +356,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="text-center space-y-2">
                   <h3 className="text-2xl font-bold text-slate-800 group-hover:text-amber-600 transition-colors">Sou Gestão</h3>
-                  <p className="text-slate-500 text-sm">Gerencie o cardápio, visualize estatísticas e administre usuários.</p>
+                  <p className="text-slate-500 text-sm">Gere enquetes, revise os resultados e administre os eleitores.</p>
                 </div>
               </button>
             </div>
@@ -427,7 +454,7 @@ const App: React.FC = () => {
           
           {userRole === 'admin' && (
             <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:w-auto overflow-x-auto">
-               <button onClick={() => setView('admin')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${view === 'admin' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}>Cozinha</button>
+               <button onClick={() => setView('admin')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${view === 'admin' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}>Opções / Resultados</button>
                <button onClick={() => setView('users')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${view === 'users' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}>Usuários</button>
             </div>
           )}
@@ -466,25 +493,26 @@ const App: React.FC = () => {
           <>
             {/* Header Section */}
             <div className="text-center space-y-3">
-              <div className="inline-block bg-indigo-100 text-indigo-700 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-2">
-                Sistema de Votação
+              <div className="inline-block bg-indigo-150 text-indigo-700 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest mb-1 shadow-sm border border-indigo-200">
+                🎫 Portal EduVotação
               </div>
-              <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight sm:text-5xl">EDUVOTAÇÃO</h2>
-              <p className="text-slate-500 max-w-xl mx-auto text-lg">
-                Registre sua presença no almoço para garantir uma alimentação equilibrada e sem desperdícios.
+              <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight sm:text-5xl">EDUVOTAÇÃO GERAL</h2>
+              <p className="text-slate-500 max-w-xl mx-auto text-base">
+                Plataforma democrática escolar. Escolha uma categoria abaixo para exercer sua cidadania e registrar sua voz nas decisões escolares.
               </p>
             </div>
 
             {!currentStudent ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center max-w-4xl mx-auto">
-                <div className="order-2 md:order-1">
-                  <StatsDashboard selections={selections.filter(s => s.timestamp.startsWith(new Date().toISOString().split('T')[0]))} mealOptions={activeMeals} />
+                <div className="order-2 md:order-1 md:col-span-2">
+                  <StatsDashboard selections={selections} mealOptions={mealOptions} />
                 </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                 {/* User Selection Section */}
                 <div className="lg:col-span-2 space-y-6">
+                  {/* Student profile info card */}
                   <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold text-xl">
@@ -492,7 +520,13 @@ const App: React.FC = () => {
                       </div>
                       <div>
                         <h3 className="text-lg font-bold text-slate-800">{currentStudent.name}</h3>
-                        <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">Matrícula: {currentStudent.matricula}</p>
+                        <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                          <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Matrícula: {currentStudent.matricula}</span>
+                          <span className="text-slate-300">•</span>
+                          <span className="text-xs bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-md">Sala: {currentStudent.sala || 'N/A'}</span>
+                          <span className="text-slate-300">•</span>
+                          <span className="text-xs bg-indigo-50 text-indigo-600 font-bold px-2 py-0.5 rounded-md">Turno: {currentStudent.turno || 'Manhã'}</span>
+                        </div>
                       </div>
                     </div>
                     <button onClick={logout} className="text-slate-400 hover:text-red-500 p-2 transition-colors flex flex-col items-center">
@@ -501,60 +535,108 @@ const App: React.FC = () => {
                     </button>
                   </div>
 
+                  {/* Student Ballot Category Switcher */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Cédulas Disponíveis</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {(['Gremio', 'Representante', 'Alimentação', 'Outros'] as const).map((cat) => {
+                        const votedInThisCat = selections.some(
+                          s => s.matricula === currentStudent.matricula && s.category === cat
+                        );
+                        const isSelected = selectedCategory === cat;
+                        
+                        return (
+                          <button
+                            key={cat}
+                            onClick={() => {
+                              setSelectedCategory(cat);
+                              setSelectedMealId(null);
+                              setAiTip('');
+                            }}
+                            className={`p-3.5 rounded-2xl border-2 text-center transition-all ${
+                              isSelected 
+                                ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-600/10' 
+                                : 'bg-white border-slate-150 hover:border-indigo-200 hover:bg-slate-50 text-slate-700'
+                            }`}
+                          >
+                            <span className="block font-black text-xs leading-none mb-1">
+                              {cat === 'Gremio' ? 'Grêmio' : cat === 'Representante' ? 'Representante' : cat === 'Alimentação' ? 'Alimentação' : 'Outros'}
+                            </span>
+                            <span className={`inline-flex items-center gap-1.5 text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
+                              votedInThisCat 
+                                ? isSelected ? 'bg-white/20 text-white' : 'bg-green-150 text-green-700'
+                                : isSelected ? 'bg-white/10 text-indigo-100' : 'bg-amber-100 text-amber-700'
+                            }`}>
+                              <i className={`fas ${votedInThisCat ? 'fa-check' : 'fa-hourglass-half'}`}></i>
+                              {votedInThisCat ? 'Votado' : 'Pendente'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {hasAlreadyVoted ? (
                     <div className="bg-gradient-to-br from-green-500 to-emerald-600 p-10 rounded-3xl text-center text-white shadow-xl animate-fadeIn">
                       <div className="w-20 h-20 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center mx-auto text-4xl mb-6">
-                        <i className="fas fa-heart"></i>
+                        <i className="fas fa-check-double animate-pulse"></i>
                       </div>
-                      <h3 className="text-3xl font-black mb-2">Opção Confirmada!</h3>
-                      <p className="text-white/80 text-lg mb-8">Obrigado por registrar sua escolha. Sua refeição está garantida.</p>
+                      <h3 className="text-3xl font-black mb-2">Voto Registrado no Sistema!</h3>
+                      <p className="text-white/80 text-base mb-8 max-w-md mx-auto">
+                        Seu voto para <strong>{selectedCategory === 'Gremio' ? 'Grêmio Escolar' : selectedCategory === 'Representante' ? 'Representante de Classe' : selectedCategory === 'Alimentação' ? 'Alimentação / Merenda' : 'Outros Assuntos'}</strong> já foi computado criptograficamente com sucesso nesta urna. Escolha outra aba acima ou finalize sua sessão.
+                      </p>
                       <button 
                         onClick={logout} 
-                        className="bg-white text-emerald-600 font-bold px-8 py-3 rounded-2xl shadow-lg hover:shadow-xl transition-all active:scale-95"
+                        className="bg-white text-emerald-600 font-extrabold px-8 py-3.5 rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95 text-sm"
                       >
-                        Finalizar e Sair
+                        Finalizar e Sair do Sistema
                       </button>
                     </div>
                   ) : (
                     <div className="space-y-6">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-2xl font-bold text-slate-800">Cardápio do Dia</h3>
-                        <span className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full border border-amber-100">
-                          ESCOLHA ÚNICA
+                        <h3 className="text-xl font-bold text-slate-800">
+                          {selectedCategory === 'Gremio' ? 'Candidatos do Grêmio Escolar' : 
+                           selectedCategory === 'Representante' ? 'Representantes de Classe' : 
+                           selectedCategory === 'Alimentação' ? 'Selecione a Opção de Refeição' : 
+                           'Projetos e Assuntos Gerais'}
+                        </h3>
+                        <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-150 uppercase tracking-wider">
+                          Uso Individual
                         </span>
                       </div>
                       
-                      <div className="grid grid-cols-1 gap-4">
-                        {activeMeals.map((meal) => (
-                          <button
-                            key={meal.id}
-                            onClick={() => handleMealSelection(meal.id)}
-                            className={`text-left p-6 rounded-3xl border-2 transition-all relative group overflow-hidden ${
-                              selectedMealId === meal.id 
-                                ? 'border-indigo-600 bg-indigo-50/50 shadow-md ring-4 ring-indigo-500/5' 
-                                : 'border-slate-100 bg-white hover:border-indigo-200 hover:shadow-sm'
-                            }`}
-                          >
-                            {selectedMealId === meal.id && (
-                              <div className="absolute top-4 right-4 text-indigo-600 animate-fadeIn">
-                                <i className="fas fa-check-circle text-2xl"></i>
+                      {activeMeals.length > 0 ? (
+                        <div className="grid grid-cols-1 gap-4">
+                          {activeMeals.map((meal) => (
+                            <button
+                              key={meal.id}
+                              onClick={() => handleMealSelection(meal.id)}
+                              className={`text-left p-6 rounded-3xl border-2 transition-all relative group overflow-hidden ${
+                                selectedMealId === meal.id 
+                                  ? 'border-indigo-600 bg-indigo-50/40 shadow-md ring-4 ring-indigo-500/5' 
+                                  : 'border-slate-150 bg-white hover:border-indigo-200 hover:shadow-sm'
+                              }`}
+                            >
+                              {selectedMealId === meal.id && (
+                                <div className="absolute top-4 right-4 text-indigo-600 animate-fadeIn">
+                                  <i className="fas fa-check-circle text-2xl animate-scaleUp"></i>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-2 mb-3">
+                                <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md font-mono">{meal.calories}</span>
                               </div>
-                            )}
-                            <div className="flex items-center gap-2 mb-3">
-                              <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest ${
-                                meal.category === 'Padrao' ? 'bg-indigo-100 text-indigo-600' :
-                                meal.category === 'Vegetariana' ? 'bg-emerald-100 text-emerald-600' :
-                                'bg-orange-100 text-orange-600'
-                              }`}>
-                                {meal.category}
-                              </span>
-                              <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-md">{meal.calories}</span>
-                            </div>
-                            <h4 className="font-bold text-slate-900 text-xl mb-2 group-hover:text-indigo-600 transition-colors">{meal.name}</h4>
-                            <p className="text-slate-500 text-sm leading-relaxed max-w-lg">{meal.description}</p>
-                          </button>
-                        ))}
-                      </div>
+                              <h4 className="font-extrabold text-slate-900 text-xl mb-2 group-hover:text-indigo-600 transition-colors uppercase">{meal.name}</h4>
+                              <p className="text-slate-500 text-sm leading-relaxed max-w-xl">{meal.description}</p>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="bg-slate-50 p-12 text-center rounded-3xl border-2 border-dashed border-slate-200">
+                          <i className="fas fa-folder-open text-4xl text-slate-300 mb-3"></i>
+                          <p className="text-slate-500 font-bold">Nenhum candidato ou opção cadastrada nesta categoria no momento.</p>
+                        </div>
+                      )}
 
                       {selectedMealId && (
                         <div className="bg-slate-900 p-8 rounded-3xl text-white shadow-2xl animate-fadeIn space-y-6 relative overflow-hidden">
@@ -565,10 +647,10 @@ const App: React.FC = () => {
                           <div className="space-y-4 relative z-10">
                             <div className="flex items-center gap-3 text-indigo-400">
                               <i className="fas fa-sparkles"></i>
-                              <span className="text-xs font-black uppercase tracking-widest">Dica da Nutrição IA</span>
+                              <span className="text-xs font-black uppercase tracking-widest">Análise da IA sobre a Opção</span>
                             </div>
-                            <p className="text-xl font-medium leading-tight text-indigo-50 italic">
-                              "{loading ? "Consultando a nutricionista digital..." : aiTip}"
+                            <p className="text-lg font-medium leading-tight text-indigo-50 italic">
+                              "{loading ? "Consultando a inteligência artificial..." : aiTip}"
                             </p>
                           </div>
                           
@@ -578,11 +660,11 @@ const App: React.FC = () => {
                               disabled={loading}
                               className="w-full bg-indigo-500 hover:bg-indigo-400 text-white font-black py-5 rounded-2xl shadow-lg transition-all active:scale-[0.98] text-xl flex items-center justify-center gap-3 disabled:opacity-50"
                             >
-                              CONFIRMAR ESTE PRATO
+                              CONFIRMAR SEU VOTO
                               <i className="fas fa-arrow-right text-sm"></i>
                             </button>
                             <p className="text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-4">
-                              Após confirmar, você não poderá alterar sua escolha.
+                              Ao confirmar, sua decisão será gravada para esta cédula de voto.
                             </p>
                           </div>
                         </div>
@@ -593,15 +675,13 @@ const App: React.FC = () => {
 
                 {/* Sidebar Stats */}
                 <div className="space-y-6">
-                   <StatsDashboard selections={selections.filter(s => s.timestamp.startsWith(new Date().toISOString().split('T')[0]))} mealOptions={activeMeals} />
-                   
                    <div className="bg-slate-800 p-6 rounded-3xl text-white shadow-lg space-y-4">
                      <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs uppercase tracking-widest">
-                       <i className="fas fa-brain"></i>
+                       <i className="fas fa-brain animate-pulse"></i>
                        EduInsight IA
                      </div>
-                     <p className="text-slate-300 italic text-sm leading-relaxed">
-                       "{insight || "Gerando insights sobre o consumo da merenda hoje..."}"
+                     <p className="text-slate-300 italic text-xs leading-relaxed">
+                       "{insight || "Gerando insights sobre as mobilizações e eleições hoje..."}"
                      </p>
                    </div>
                 </div>

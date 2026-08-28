@@ -14,7 +14,7 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
   onUpdateStudent,
   onDeleteStudent
 }) => {
-  const [newStudent, setNewStudent] = useState<Student>({ matricula: '', name: '', password: '' });
+  const [newStudent, setNewStudent] = useState<Student>({ matricula: '', name: '', password: '', turno: 'Manhã', sala: '1º Ano A' });
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [studentToDelete, setStudentToDelete] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -30,7 +30,7 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
 
   const handleAddStudent = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStudent.matricula || !newStudent.name) return;
+    if (!newStudent.matricula || !newStudent.name || !newStudent.sala) return;
 
     if (students.some(s => s.matricula === newStudent.matricula)) {
       alert('Matrícula já cadastrada!');
@@ -38,16 +38,16 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
     }
 
     onAddStudent(newStudent);
-    setNewStudent({ matricula: '', name: '', password: '' });
+    setNewStudent({ matricula: '', name: '', password: '', turno: 'Manhã', sala: '1º Ano A' });
   };
 
   const handleUpdateStudentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingStudent || !editingStudent.name) return;
+    if (!editingStudent || !editingStudent.name || !editingStudent.sala) return;
 
     onUpdateStudent(editingStudent);
     setEditingStudent(null);
-    setNewStudent({ matricula: '', name: '', password: '' }); // Clear any partial new student data
+    setNewStudent({ matricula: '', name: '', password: '', turno: 'Manhã', sala: '1º Ano A' }); // Clear any partial new student data
   };
 
   const confirmDeleteStudent = (matricula: string) => {
@@ -66,7 +66,9 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
 
   const filteredStudents = students.filter(s => 
     s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.matricula.includes(searchTerm)
+    s.matricula.includes(searchTerm) ||
+    s.sala.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.turno || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -107,6 +109,40 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
                 placeholder="Ex: João da Silva"
               />
             </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Turno</label>
+                <select
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                  value={editingStudent ? editingStudent.turno : newStudent.turno}
+                  onChange={e => editingStudent 
+                    ? setEditingStudent({...editingStudent, turno: e.target.value as any})
+                    : setNewStudent({...newStudent, turno: e.target.value as any})
+                  }
+                  required
+                >
+                  <option value="Manhã">Manhã</option>
+                  <option value="Tarde">Tarde</option>
+                  <option value="Noite">Noite</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Sala</label>
+                <input 
+                  type="text" 
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                  value={editingStudent ? editingStudent.sala : newStudent.sala}
+                  onChange={e => editingStudent 
+                    ? setEditingStudent({...editingStudent, sala: e.target.value})
+                    : setNewStudent({...newStudent, sala: e.target.value})
+                  }
+                  required
+                  placeholder="Ex: 1º Ano A"
+                />
+              </div>
+            </div>
+
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Senha</label>
               <input 
@@ -169,6 +205,8 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
                 <tr>
                   <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Matrícula</th>
                   <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Nome</th>
+                  <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Sala</th>
+                  <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Turno</th>
                   <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Ações</th>
                 </tr>
               </thead>
@@ -186,7 +224,17 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
                           <span className="ml-2 text-xs text-amber-600 font-bold uppercase tracking-wider">(Editando)</span>
                         )}
                       </td>
-                      <td className="p-4 text-right space-x-2">
+                      <td className="p-4 text-sm text-slate-600 font-semibold">{student.sala || 'N/A'}</td>
+                      <td className="p-4">
+                        <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                          (student.turno || 'Manhã') === 'Manhã' ? 'bg-sky-100 text-sky-700' :
+                          (student.turno || 'Manhã') === 'Tarde' ? 'bg-orange-100 text-orange-700' :
+                          'bg-indigo-100 text-indigo-700'
+                        }`}>
+                          {student.turno || 'Manhã'}
+                        </span>
+                      </td>
+                      <td className="p-4 text-right space-x-2 whitespace-nowrap">
                         <button 
                           onClick={() => setEditingStudent(student)}
                           className={`p-2 rounded-lg transition-colors ${editingStudent?.matricula === student.matricula ? 'text-amber-600 bg-amber-100' : 'text-amber-500 hover:bg-amber-50'}`}

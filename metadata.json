@@ -1,5 +1,6 @@
 {
   "name": "EDUVOTAÇÃO",
-  "description": "Um sistema moderno para gestão e escolha de merenda escolar, permitindo que alunos registrem sua presença e prefência de refeição diária com insights nutricionais gerados por IA.",
-  "requestFramePermissions": []
+  "description": "Um sistema moderno para votação estudantil genérica em ambiente escolar, permitindo que alunos participem ativamente de decisões sobre chapas, projetos e festivais, com análises de IA em tempo real.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
