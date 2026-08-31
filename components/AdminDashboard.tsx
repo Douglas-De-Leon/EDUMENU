@@ -129,9 +129,83 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [selections]);
 
-  // Overall statistics
+  // Overall statistics and temporal metrics
   const totalGlobalVotes = selections.length;
   const totalRegisteredStudents = students.length;
+
+  const temporalStats = useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    
+    // Start of the week (Sunday)
+    const currentDay = now.getDay();
+    const diff = now.getDate() - currentDay;
+    const startOfWeek = new Date(now.setDate(diff));
+    startOfWeek.setHours(0,0,0,0);
+
+    // Start of the month
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    // Start of the year
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+
+    let votesToday = 0;
+    let votesWeek = 0;
+    let votesMonth = 0;
+    let votesYear = 0;
+
+    // Unique voters per period (could count unique matriculas, but assuming 1 vote per category per student, we will count total votes cast in period)
+    const uniqueVotersToday = new Set();
+    const uniqueVotersWeek = new Set();
+    const uniqueVotersMonth = new Set();
+    const uniqueVotersYear = new Set();
+
+    let catVotesToday = 0;
+    let catVotesWeek = 0;
+    let catVotesMonth = 0;
+    let catVotesYear = 0;
+
+    selections.forEach(s => {
+      const voteDate = new Date(s.timestamp);
+      const isToday = s.timestamp && s.timestamp.startsWith(todayStr);
+      const isWeek = voteDate >= startOfWeek;
+      const isMonth = voteDate >= startOfMonth;
+      const isYear = voteDate >= startOfYear;
+      const isCategory = s.category === selectedCategory;
+      
+      if (isToday) {
+        votesToday++;
+        uniqueVotersToday.add(s.matricula);
+        if (isCategory) catVotesToday++;
+      }
+      if (isWeek) {
+        votesWeek++;
+        uniqueVotersWeek.add(s.matricula);
+        if (isCategory) catVotesWeek++;
+      }
+      if (isMonth) {
+        votesMonth++;
+        uniqueVotersMonth.add(s.matricula);
+        if (isCategory) catVotesMonth++;
+      }
+      if (isYear) {
+        votesYear++;
+        uniqueVotersYear.add(s.matricula);
+        if (isCategory) catVotesYear++;
+      }
+    });
+
+    return {
+      votesToday, catVotesToday,
+      uniqueVotersToday: uniqueVotersToday.size,
+      votesWeek, catVotesWeek,
+      uniqueVotersWeek: uniqueVotersWeek.size,
+      votesMonth, catVotesMonth,
+      uniqueVotersMonth: uniqueVotersMonth.size,
+      votesYear, catVotesYear,
+      uniqueVotersYear: uniqueVotersYear.size,
+    };
+  }, [selections, selectedCategory]);
 
   const handleAddMealSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -263,6 +337,86 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {activeTab === 'analytics' && (
         <div className="space-y-8">
+          {/* Global Temporal Metrics Row */}
+          <div className="space-y-2">
+            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <i className="fas fa-globe-americas"></i> Engajamento Global vs Categoria ({getCategoryLabel(selectedCategory)})
+            </h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-gradient-to-br from-indigo-500 to-blue-600 p-5 rounded-2xl text-white shadow-md relative overflow-hidden flex flex-col justify-between">
+                <i className="fas fa-calendar-day absolute -bottom-2 -right-2 text-6xl opacity-10"></i>
+                <p className="text-xs font-black uppercase tracking-widest text-indigo-100 mb-1">Hoje</p>
+                <div>
+                  <div className="flex items-end gap-2 mb-1">
+                    <span className="text-3xl font-extrabold">{temporalStats.votesToday}</span>
+                    <span className="text-xs font-medium text-indigo-100 mb-1.5 uppercase tracking-wide">Votos Totais</span>
+                  </div>
+                  <p className="text-xs font-medium text-indigo-100 bg-black/10 inline-block px-2 py-0.5 rounded-full mb-3">
+                    {temporalStats.uniqueVotersToday} alunos ({((temporalStats.uniqueVotersToday / (totalRegisteredStudents || 1)) * 100).toFixed(1)}%)
+                  </p>
+                  <div className="border-t border-white/20 pt-2 flex justify-between items-center text-sm">
+                    <span className="font-medium text-indigo-100">Nesta Categoria:</span>
+                    <span className="font-bold">{temporalStats.catVotesToday} ({temporalStats.votesToday > 0 ? ((temporalStats.catVotesToday / temporalStats.votesToday) * 100).toFixed(0) : 0}%)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-5 rounded-2xl text-white shadow-md relative overflow-hidden flex flex-col justify-between">
+                <i className="fas fa-calendar-week absolute -bottom-2 -right-2 text-6xl opacity-10"></i>
+                <p className="text-xs font-black uppercase tracking-widest text-emerald-100 mb-1">Na Semana</p>
+                <div>
+                  <div className="flex items-end gap-2 mb-1">
+                    <span className="text-3xl font-extrabold">{temporalStats.votesWeek}</span>
+                    <span className="text-xs font-medium text-emerald-100 mb-1.5 uppercase tracking-wide">Votos Totais</span>
+                  </div>
+                  <p className="text-xs font-medium text-emerald-100 bg-black/10 inline-block px-2 py-0.5 rounded-full mb-3">
+                    {temporalStats.uniqueVotersWeek} alunos ({((temporalStats.uniqueVotersWeek / (totalRegisteredStudents || 1)) * 100).toFixed(1)}%)
+                  </p>
+                  <div className="border-t border-white/20 pt-2 flex justify-between items-center text-sm">
+                    <span className="font-medium text-emerald-100">Nesta Categoria:</span>
+                    <span className="font-bold">{temporalStats.catVotesWeek} ({temporalStats.votesWeek > 0 ? ((temporalStats.catVotesWeek / temporalStats.votesWeek) * 100).toFixed(0) : 0}%)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-5 rounded-2xl text-white shadow-md relative overflow-hidden flex flex-col justify-between">
+                <i className="fas fa-calendar-alt absolute -bottom-2 -right-2 text-6xl opacity-10"></i>
+                <p className="text-xs font-black uppercase tracking-widest text-amber-100 mb-1">No Mês</p>
+                <div>
+                  <div className="flex items-end gap-2 mb-1">
+                    <span className="text-3xl font-extrabold">{temporalStats.votesMonth}</span>
+                    <span className="text-xs font-medium text-amber-100 mb-1.5 uppercase tracking-wide">Votos Totais</span>
+                  </div>
+                  <p className="text-xs font-medium text-amber-100 bg-black/10 inline-block px-2 py-0.5 rounded-full mb-3">
+                    {temporalStats.uniqueVotersMonth} alunos ({((temporalStats.uniqueVotersMonth / (totalRegisteredStudents || 1)) * 100).toFixed(1)}%)
+                  </p>
+                  <div className="border-t border-white/20 pt-2 flex justify-between items-center text-sm">
+                    <span className="font-medium text-amber-100">Nesta Categoria:</span>
+                    <span className="font-bold">{temporalStats.catVotesMonth} ({temporalStats.votesMonth > 0 ? ((temporalStats.catVotesMonth / temporalStats.votesMonth) * 100).toFixed(0) : 0}%)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-purple-500 to-pink-600 p-5 rounded-2xl text-white shadow-md relative overflow-hidden flex flex-col justify-between">
+                <i className="fas fa-calendar absolute -bottom-2 -right-2 text-6xl opacity-10"></i>
+                <p className="text-xs font-black uppercase tracking-widest text-purple-100 mb-1">No Ano</p>
+                <div>
+                  <div className="flex items-end gap-2 mb-1">
+                    <span className="text-3xl font-extrabold">{temporalStats.votesYear}</span>
+                    <span className="text-xs font-medium text-purple-100 mb-1.5 uppercase tracking-wide">Votos Totais</span>
+                  </div>
+                  <p className="text-xs font-medium text-purple-100 bg-black/10 inline-block px-2 py-0.5 rounded-full mb-3">
+                    {temporalStats.uniqueVotersYear} alunos ({((temporalStats.uniqueVotersYear / (totalRegisteredStudents || 1)) * 100).toFixed(1)}%)
+                  </p>
+                  <div className="border-t border-white/20 pt-2 flex justify-between items-center text-sm">
+                    <span className="font-medium text-purple-100">Nesta Categoria:</span>
+                    <span className="font-bold">{temporalStats.catVotesYear} ({temporalStats.votesYear > 0 ? ((temporalStats.catVotesYear / temporalStats.votesYear) * 100).toFixed(0) : 0}%)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Categories Horizontal Interactive Switcher */}
           <div className="space-y-2">
             <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Filtrar Apuração por Categoria</h4>

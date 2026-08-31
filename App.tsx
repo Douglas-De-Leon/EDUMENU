@@ -7,7 +7,6 @@ import { UserManagementDashboard } from './components/UserManagementDashboard';
 import { MasterDashboard } from './components/MasterDashboard';
 import { Student, Selection, MealOption, AdminUser } from './types';
 import { MEAL_OPTIONS, INITIAL_STUDENTS } from './constants';
-import { getNutritionalTip, getDailyStatsInsight } from './services/geminiService';
 import { db } from './firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, getDoc, getDocs } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from './utils/firestoreErrorHandler';
@@ -27,9 +26,6 @@ const App: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<'Gremio' | 'Representante' | 'Alimentação' | 'Outros'>('Gremio');
   const [selectedMealId, setSelectedMealId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [aiTip, setAiTip] = useState<string>('');
-  const [insight, setInsight] = useState<string>('');
-  const [loading, setLoading] = useState(false);
 
   // Persistence (Firestore)
   useEffect(() => {
@@ -122,21 +118,6 @@ const App: React.FC = () => {
     };
   }, []);
 
-  useEffect(() => {
-    updateInsight();
-  }, [selections]);
-
-  const updateInsight = async () => {
-    if (selections.length > 0) {
-      const counts = mealOptions.reduce((acc: any, meal) => {
-        acc[meal.name] = selections.filter(s => s.mealId === meal.id).length;
-        return acc;
-      }, {});
-      const text = await getDailyStatsInsight(selections.length, counts);
-      setInsight(text);
-    }
-  };
-
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -173,15 +154,7 @@ const App: React.FC = () => {
 
   const handleMealSelection = async (mealId: string) => {
     if (!currentStudent) return;
-    setLoading(true);
     setSelectedMealId(mealId);
-    
-    const meal = mealOptions.find(m => m.id === mealId);
-    if (meal) {
-      const tip = await getNutritionalTip(meal.name);
-      setAiTip(tip);
-    }
-    setLoading(false);
   };
 
   const handleAddMeal = async (meal: MealOption) => {
@@ -271,7 +244,6 @@ const App: React.FC = () => {
     try {
       await setDoc(doc(db, 'selections', `${newSelection.matricula}_${selectedCategory}_${newSelection.timestamp.replace(/[:.]/g, '-')}`), newSelection);
       setSelectedMealId(null);
-      setAiTip('');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'selections');
     }
@@ -551,7 +523,6 @@ const App: React.FC = () => {
                             onClick={() => {
                               setSelectedCategory(cat);
                               setSelectedMealId(null);
-                              setAiTip('');
                             }}
                             className={`p-3.5 rounded-2xl border-2 text-center transition-all ${
                               isSelected 
@@ -644,21 +615,10 @@ const App: React.FC = () => {
                             <i className="fas fa-ticket-alt text-8xl -rotate-12 text-slate-800"></i>
                           </div>
                           
-                          <div className="space-y-4 relative z-10">
-                            <div className="flex items-center gap-3 text-indigo-400">
-                              <i className="fas fa-sparkles"></i>
-                              <span className="text-xs font-black uppercase tracking-widest">Análise da IA sobre a Opção</span>
-                            </div>
-                            <p className="text-lg font-medium leading-tight text-indigo-50 italic">
-                              "{loading ? "Consultando a inteligência artificial..." : aiTip}"
-                            </p>
-                          </div>
-                          
                           <div className="pt-2">
                             <button 
                               onClick={confirmSelection}
-                              disabled={loading}
-                              className="w-full bg-indigo-500 hover:bg-indigo-400 text-white font-black py-5 rounded-2xl shadow-lg transition-all active:scale-[0.98] text-xl flex items-center justify-center gap-3 disabled:opacity-50"
+                              className="w-full bg-indigo-500 hover:bg-indigo-400 text-white font-black py-5 rounded-2xl shadow-lg transition-all active:scale-[0.98] text-xl flex items-center justify-center gap-3"
                             >
                               CONFIRMAR SEU VOTO
                               <i className="fas fa-arrow-right text-sm"></i>
@@ -675,15 +635,7 @@ const App: React.FC = () => {
 
                 {/* Sidebar Stats */}
                 <div className="space-y-6">
-                   <div className="bg-slate-800 p-6 rounded-3xl text-white shadow-lg space-y-4">
-                     <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs uppercase tracking-widest">
-                       <i className="fas fa-brain animate-pulse"></i>
-                       EduInsight IA
-                     </div>
-                     <p className="text-slate-300 italic text-xs leading-relaxed">
-                       "{insight || "Gerando insights sobre as mobilizações e eleições hoje..."}"
-                     </p>
-                   </div>
+                   <StatsDashboard selections={selections} mealOptions={mealOptions} />
                 </div>
               </div>
             )}
