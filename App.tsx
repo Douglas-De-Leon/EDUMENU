@@ -42,10 +42,7 @@ const App: React.FC = () => {
       if (studentsData.length > 0) {
         setRegisteredStudents(studentsData);
       } else {
-        // Initialize with default if empty
-        INITIAL_STUDENTS.forEach(student => {
-          setDoc(doc(db, 'students', student.matricula), student).catch(e => handleFirestoreError(e, OperationType.CREATE, 'students'));
-        });
+        setRegisteredStudents([]);
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'students');
@@ -79,10 +76,7 @@ const App: React.FC = () => {
       if (mealsData.length > 0) {
         setMealOptions(mealsData);
       } else {
-        // Initialize with default if empty
-        MEAL_OPTIONS.forEach(meal => {
-          setDoc(doc(db, 'meals', meal.id), meal).catch(e => handleFirestoreError(e, OperationType.CREATE, 'meals'));
-        });
+        setMealOptions([]);
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'meals');
