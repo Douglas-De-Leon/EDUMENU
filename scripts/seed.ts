@@ -1,49 +1,23 @@
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Student, MealOption } from '../types';
-
-// ============================================================================
-// SCRIPT DE MIGRAÇÃO / POPULAÇÃO DE DADOS (SEED)
-// ============================================================================
-// Utilize este script para cadastrar alunos e opções reais diretamente no
-// banco de dados Firestore.
-// ============================================================================
-
-// 1. INSIRA AQUI OS SEUS ALUNOS REAIS
-const realStudentsToSeed: Student[] = [
-  // Exemplo de formato:
-  // { matricula: '2024001', name: 'João Silva', password: '123', turno: 'Integral', sala: '1º Ano', turma: 'A' },
-  // { matricula: '2024002', name: 'Maria Souza', password: '123', turno: 'Integral', sala: '2º Ano', turma: 'B' },
-];
-
-// 2. INSIRA AQUI AS OPÇÕES/CHAPAS/CANDIDATOS REAIS
-const realOptionsToSeed: MealOption[] = [
-  // Exemplo de formato:
-  // {
-  //   id: 'gremio-1',
-  //   name: 'Chapa C: Nova Geração',
-  //   description: 'Foco na tecnologia e modernização do pátio escolar.',
-  //   category: 'Gremio',
-  //   calories: 'Número 30',
-  //   active: true
-  // },
-];
+import { INITIAL_STUDENTS, MEAL_OPTIONS } from '../constants';
 
 // Função principal de salvamento
 async function seedDatabase() {
-  console.log('Iniciando o salvamento de dados reais no Firebase...');
+  console.log('Iniciando o salvamento de dados padrão no Firebase...');
   console.log('----------------------------------------------------');
 
   try {
     let studentCount = 0;
-    for (const student of realStudentsToSeed) {
+    for (const student of INITIAL_STUDENTS) {
       await setDoc(doc(db, 'students', student.matricula), student);
       studentCount++;
       console.log(`[ALUNO] ${student.name} (Matrícula: ${student.matricula}) salvo com sucesso.`);
     }
 
     let optionCount = 0;
-    for (const option of realOptionsToSeed) {
+    for (const option of MEAL_OPTIONS) {
       await setDoc(doc(db, 'meals', option.id), option);
       optionCount++;
       console.log(`[OPÇÃO] ${option.name} (Categoria: ${option.category}) salvo com sucesso.`);
@@ -62,3 +36,4 @@ async function seedDatabase() {
 
 // Executa a função
 seedDatabase();
+

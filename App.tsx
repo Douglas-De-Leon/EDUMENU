@@ -31,6 +31,7 @@ const App: React.FC = () => {
   const [selections, setSelections] = useState<Selection[]>([]);
   const [mealOptions, setMealOptions] = useState<MealOption[]>(MEAL_OPTIONS);
   const [selectedCategory, setSelectedCategory] = useState<'Gremio' | 'Representante' | 'Alimentação' | 'Outros'>('Gremio');
+  const [showSummary, setShowSummary] = useState(false);
   const [selectedMealId, setSelectedMealId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -538,7 +539,7 @@ const App: React.FC = () => {
                         const votedInThisCat = selections.some(
                           s => s.matricula === currentStudent.matricula && s.category === cat
                         );
-                        const isSelected = selectedCategory === cat;
+                        const isSelected = selectedCategory === cat && !showSummary;
                         
                         return (
                           <button
@@ -546,6 +547,7 @@ const App: React.FC = () => {
                             onClick={() => {
                               setSelectedCategory(cat);
                               setSelectedMealId(null);
+                              setShowSummary(false);
                             }}
                             className={`p-3.5 rounded-2xl border-2 text-center transition-all ${
                               isSelected 
@@ -570,7 +572,48 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  {hasAlreadyVoted ? (
+                  {showSummary ? (
+                    <div className="bg-slate-50 p-8 sm:p-12 rounded-3xl border-2 border-slate-200 shadow-sm animate-fadeIn">
+                      <div className="text-center mb-10">
+                        <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-4xl mb-6 shadow-inner">
+                          <i className="fas fa-clipboard-check"></i>
+                        </div>
+                        <h3 className="text-3xl font-black text-slate-800 mb-2">Resumo das Votações</h3>
+                        <p className="text-slate-500 max-w-md mx-auto">Confira abaixo os votos que você registrou nesta urna. Eles já foram computados criptograficamente.</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {(['Gremio', 'Representante', 'Alimentação', 'Outros'] as const).map((cat) => {
+                          const vote = selections.find(s => s.matricula === currentStudent.matricula && s.category === cat);
+                          const meal = vote ? mealOptions.find(m => m.id === vote.mealId) : null;
+                          
+                          return (
+                            <div key={cat} className="bg-white p-5 rounded-2xl border border-slate-200 flex items-center gap-4 shadow-sm hover:shadow-md transition-shadow">
+                              <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${vote ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
+                                <i className={`fas ${cat === 'Gremio' ? 'fa-users' : cat === 'Representante' ? 'fa-user-tie' : cat === 'Alimentação' ? 'fa-utensils' : 'fa-clipboard-list'} text-xl`}></i>
+                              </div>
+                              <div className="overflow-hidden">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{cat === 'Gremio' ? 'Grêmio Escolar' : cat === 'Representante' ? 'Representante de Classe' : cat === 'Alimentação' ? 'Alimentação' : 'Outros'}</p>
+                                <p className={`font-bold truncate ${vote ? 'text-slate-800 text-base' : 'text-slate-400 italic text-sm'}`}>
+                                  {meal ? meal.name : 'Pendente (Não votou)'}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      
+                      <div className="mt-10 flex justify-center">
+                        <button 
+                          onClick={logout} 
+                          className="bg-slate-800 text-white font-extrabold px-10 py-4 rounded-xl shadow-lg hover:shadow-xl hover:bg-slate-900 transition-all active:scale-95 text-sm flex items-center gap-3"
+                        >
+                          <i className="fas fa-sign-out-alt"></i>
+                          Finalizar e Sair do Sistema
+                        </button>
+                      </div>
+                    </div>
+                  ) : hasAlreadyVoted ? (
                     <div className="bg-gradient-to-br from-green-500 to-emerald-600 p-10 rounded-3xl text-center text-white shadow-xl animate-fadeIn">
                       <div className="w-20 h-20 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center mx-auto text-4xl mb-6">
                         <i className="fas fa-check-double animate-pulse"></i>
@@ -591,10 +634,10 @@ const App: React.FC = () => {
                         </button>
                       ) : (
                         <button 
-                          onClick={logout} 
+                          onClick={() => setShowSummary(true)} 
                           className="bg-white text-emerald-600 font-extrabold px-8 py-3.5 rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95 text-sm"
                         >
-                          Finalizar e Sair do Sistema
+                          Concluir e Voltar ao Início
                         </button>
                       )}
                     </div>

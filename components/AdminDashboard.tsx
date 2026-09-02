@@ -77,11 +77,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       };
     }).sort((a, b) => b.count - a.count);
 
-    // Votes per Shift (Turno)
-    const shifts = ['Manhã', 'Tarde', 'Noite'] as const;
-    const votesByShift = shifts.map(shift => {
-      const count = catSelections.filter(s => s.turno === shift).length;
-      return { name: shift, value: count };
+    // Votes per Series (Série)
+    const series = ['1º Ano', '2º Ano', '3º Ano'] as const;
+    const votesBySerie = series.map(serie => {
+      const count = catSelections.filter(s => s.sala === serie).length;
+      return { name: serie, value: count };
     });
 
     // Votes per Class (Turma)
@@ -107,7 +107,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     return {
       votesByOption,
-      votesByShift,
+      votesBySerie,
       votesByClass,
       totalVotes,
       activeCandidatesCount,
@@ -556,11 +556,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
-            {/* Shift Breakdown (Turnos) */}
+            {/* Series Breakdown (Séries) */}
             <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4 flex flex-col justify-between">
               <div>
-                <h3 className="text-lg font-bold text-slate-800">Participação por Turno</h3>
-                <p className="text-xs text-slate-400">Comparação de engajamento por período</p>
+                <h3 className="text-lg font-bold text-slate-800">Participação por Série</h3>
+                <p className="text-xs text-slate-400">Comparação de engajamento por ano</p>
               </div>
 
               <div className="h-48 w-full flex items-center justify-center">
@@ -568,7 +568,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={currentCategoryStats.votesByShift}
+                        data={currentCategoryStats.votesBySerie}
                         cx="50%"
                         cy="50%"
                         innerRadius={60}
@@ -576,9 +576,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         paddingAngle={5}
                         dataKey="value"
                       >
-                        {currentCategoryStats.votesByShift.map((entry, index) => {
-                          const shiftColors: Record<string, string> = { 'Manhã': '#0EA5E9', 'Tarde': '#F43F5E', 'Noite': '#6366F1' };
-                          return <Cell key={`cell-${index}`} fill={shiftColors[entry.name] || COLORS[index]} />;
+                        {currentCategoryStats.votesBySerie.map((entry, index) => {
+                          const serieColors: Record<string, string> = { '1º Ano': '#0EA5E9', '2º Ano': '#F43F5E', '3º Ano': '#6366F1' };
+                          return <Cell key={`cell-${index}`} fill={serieColors[entry.name] || COLORS[index]} />;
                         })}
                       </Pie>
                       <Tooltip formatter={(val: any) => [`${val} votos`]} />
@@ -593,15 +593,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
 
               <div className="flex justify-around border-t border-slate-50 pt-4">
-                {currentCategoryStats.votesByShift.map((entry, idx) => {
-                  const shiftColorsText: Record<string, string> = { 'Manhã': 'text-sky-500', 'Tarde': 'text-rose-500', 'Noite': 'text-indigo-500' };
+                {currentCategoryStats.votesBySerie.map((entry, idx) => {
+                  const serieColorsText: Record<string, string> = { '1º Ano': 'text-sky-500', '2º Ano': 'text-rose-500', '3º Ano': 'text-indigo-500' };
                   const percent = currentCategoryStats.totalVotes > 0 
                     ? ((entry.value / currentCategoryStats.totalVotes) * 100).toFixed(0) 
                     : 0;
                   return (
                     <div key={entry.name} className="text-center">
                       <p className="text-xs text-slate-400 font-bold">{entry.name}</p>
-                      <p className={`text-sm font-black ${shiftColorsText[entry.name]}`}>{percent}%</p>
+                      <p className={`text-sm font-black ${serieColorsText[entry.name]}`}>{percent}%</p>
                       <span className="text-[10px] text-slate-400 font-mono">({entry.value} v)</span>
                     </div>
                   );
