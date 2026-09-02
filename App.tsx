@@ -12,13 +12,20 @@ import { collection, onSnapshot, doc, setDoc, deleteDoc, getDoc, getDocs } from 
 import { handleFirestoreError, OperationType } from './utils/firestoreErrorHandler';
 
 const App: React.FC = () => {
-  const [userRole, setUserRole] = useState<'student' | 'admin' | 'master' | null>(null);
-  const [view, setView] = useState<'student' | 'admin' | 'users' | 'master_admins'>('student');
+  const [userRole, setUserRole] = useState<'student' | 'admin' | 'master' | null>(() => {
+    return (localStorage.getItem('userRole') as any) || null;
+  });
+  const [view, setView] = useState<'student' | 'admin' | 'users' | 'master_admins'>(() => {
+    return (localStorage.getItem('view') as any) || 'student';
+  });
   const [loginStep, setLoginStep] = useState<'role_selection' | 'student_login' | 'admin_login'>('role_selection');
   const [loginId, setLoginId] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   
-  const [currentStudent, setCurrentStudent] = useState<Student | null>(null);
+  const [currentStudent, setCurrentStudent] = useState<Student | null>(() => {
+    const saved = localStorage.getItem('currentStudent');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [registeredStudents, setRegisteredStudents] = useState<Student[]>(INITIAL_STUDENTS);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [selections, setSelections] = useState<Selection[]>([]);
@@ -129,6 +136,9 @@ const App: React.FC = () => {
         setUserRole('student');
         setCurrentStudent(student);
         setView('student');
+        localStorage.setItem('userRole', 'student');
+        localStorage.setItem('view', 'student');
+        localStorage.setItem('currentStudent', JSON.stringify(student));
       } else {
         setError("Matrícula ou senha inválidas.");
       }
@@ -136,11 +146,15 @@ const App: React.FC = () => {
       if (loginId === '84040513215' && loginPassword === 'admin123') {
         setUserRole('master');
         setView('master_admins');
+        localStorage.setItem('userRole', 'master');
+        localStorage.setItem('view', 'master_admins');
       } else {
         const admin = adminUsers.find(a => a.login === loginId && a.password === loginPassword);
         if (admin) {
           setUserRole('admin');
           setView('admin');
+          localStorage.setItem('userRole', 'admin');
+          localStorage.setItem('view', 'admin');
         } else {
           setError("Login ou senha inválidos.");
         }
@@ -247,6 +261,7 @@ const App: React.FC = () => {
   };
 
   const logout = () => {
+    setUserRole(null);
     setCurrentStudent(null);
     setLoginId('');
     setLoginPassword('');
@@ -254,6 +269,9 @@ const App: React.FC = () => {
     setAiTip('');
     setError(null);
     setLoginStep('role_selection');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('view');
+    localStorage.removeItem('currentStudent');
   };
 
   // Only show active options belonging to the currently selected category
@@ -267,6 +285,15 @@ const App: React.FC = () => {
     );
   }, [selections, currentStudent, selectedCategory]);
 
+  const nextPendingCategory = useMemo(() => {
+    const categories: ('Gremio' | 'Representante' | 'Alimentação' | 'Outros')[] = ['Gremio', 'Representante', 'Alimentação', 'Outros'];
+    return categories.find(cat => {
+      const hasVoted = selections.some(s => s.matricula === currentStudent?.matricula && s.category === cat);
+      return !hasVoted;
+    });
+  }, [selections, currentStudent]);
+
+
   const handleRoleSelect = (role: 'student' | 'admin') => {
     setLoginStep(role === 'student' ? 'student_login' : 'admin_login');
     setError(null);
@@ -275,8 +302,6 @@ const App: React.FC = () => {
   };
 
   const handleExit = () => {
-    setUserRole(null);
-    setView('student');
     logout();
   };
 
@@ -555,12 +580,24 @@ const App: React.FC = () => {
                       <p className="text-white/80 text-base mb-8 max-w-md mx-auto">
                         Seu voto para <strong>{selectedCategory === 'Gremio' ? 'Grêmio Escolar' : selectedCategory === 'Representante' ? 'Representante de Classe' : selectedCategory === 'Alimentação' ? 'Alimentação / Merenda' : 'Outros Assuntos'}</strong> já foi computado criptograficamente com sucesso nesta urna. Escolha outra aba acima ou finalize sua sessão.
                       </p>
-                      <button 
-                        onClick={logout} 
-                        className="bg-white text-emerald-600 font-extrabold px-8 py-3.5 rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95 text-sm"
-                      >
-                        Finalizar e Sair do Sistema
-                      </button>
+                      {nextPendingCategory ? (
+                        <button 
+                          onClick={() => {
+                            setSelectedCategory(nextPendingCategory);
+                            setSelectedMealId(null);
+                          }} 
+                          className="bg-white text-emerald-600 font-extrabold px-8 py-3.5 rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95 text-sm"
+                        >
+                          Ir para Próxima Votação
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={logout} 
+                          className="bg-white text-emerald-600 font-extrabold px-8 py-3.5 rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95 text-sm"
+                        >
+                          Finalizar e Sair do Sistema
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-6">
