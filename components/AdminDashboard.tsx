@@ -140,7 +140,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     // Start of the week (Sunday)
     const currentDay = now.getDay();
     const diff = now.getDate() - currentDay;
-    const startOfWeek = new Date(now.setDate(diff));
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(diff);
     startOfWeek.setHours(0,0,0,0);
 
     // Start of the month
