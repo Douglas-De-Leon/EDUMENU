@@ -5,6 +5,7 @@ import { StatsDashboard } from './components/StatsDashboard';
 import { AdminDashboard } from './components/AdminDashboard';
 import { UserManagementDashboard } from './components/UserManagementDashboard';
 import { MasterDashboard } from './components/MasterDashboard';
+import { LandingPage } from './components/LandingPage';
 import { Student, Selection, MealOption, AdminUser } from './types';
 import { MEAL_OPTIONS, INITIAL_STUDENTS } from './constants';
 import { db } from './firebase';
@@ -18,7 +19,7 @@ const App: React.FC = () => {
   const [view, setView] = useState<'student' | 'admin' | 'users' | 'master_admins'>(() => {
     return (localStorage.getItem('view') as any) || 'student';
   });
-  const [loginStep, setLoginStep] = useState<'role_selection' | 'student_login' | 'admin_login'>('role_selection');
+  const [loginStep, setLoginStep] = useState<'landing' | 'role_selection' | 'student_login' | 'admin_login'>('landing');
   const [loginId, setLoginId] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   
@@ -306,6 +307,27 @@ const App: React.FC = () => {
   };
 
   if (!userRole) {
+    if (loginStep === 'landing') {
+      return (
+        <div className="min-h-screen flex flex-col bg-slate-50">
+          <header className="bg-indigo-600 text-white shadow-lg sticky top-0 z-50">
+            <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+              <div className="flex items-center space-x-2">
+                <i className="fas fa-ticket-alt text-2xl rotate-[-15deg] inline-block text-amber-300"></i>
+                <h1 className="text-xl font-black tracking-tight">EDUVOTAÇÃO</h1>
+              </div>
+              <div className="text-sm font-medium opacity-90 hidden sm:block">
+                Portal de Votação Estudantil
+              </div>
+            </div>
+          </header>
+          <main className="flex-grow">
+            <LandingPage onEnterApp={() => setLoginStep('role_selection')} />
+          </main>
+        </div>
+      );
+    }
+
     return (
       <Layout>
         <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-12 animate-fadeIn py-20">
