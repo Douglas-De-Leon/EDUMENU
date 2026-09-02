@@ -35,8 +35,9 @@ const App: React.FC = () => {
         const s = doc.data() as Student;
         studentsData.push({
           ...s,
-          turno: s.turno || 'Manhã',
-          sala: s.sala || '1º Ano A'
+          turno: s.turno || 'Integral',
+          sala: s.sala || '1º Ano',
+          turma: s.turma || 'A'
         });
       });
       if (studentsData.length > 0) {
@@ -92,8 +93,9 @@ const App: React.FC = () => {
         selectionsData.push({
           ...s,
           category: s.category || 'Gremio',
-          turno: s.turno || 'Manhã',
-          sala: s.sala || '1º Ano A'
+          turno: s.turno || 'Integral',
+          sala: s.sala || '1º Ano',
+          turma: s.turma || 'A'
         });
       });
       setSelections(selectionsData);
@@ -231,8 +233,9 @@ const App: React.FC = () => {
       mealId: selectedMealId,
       category: selectedCategory,
       timestamp: new Date().toISOString(),
-      turno: currentStudent.turno || 'Manhã',
-      sala: currentStudent.sala || '1º Ano A'
+      turno: currentStudent.turno || 'Integral',
+      sala: currentStudent.sala || '1º Ano',
+      turma: currentStudent.turma || 'A'
     };
 
     try {
@@ -489,9 +492,11 @@ const App: React.FC = () => {
                         <div className="flex flex-wrap items-center gap-2 mt-0.5">
                           <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Matrícula: {currentStudent.matricula}</span>
                           <span className="text-slate-300">•</span>
-                          <span className="text-xs bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-md">Sala: {currentStudent.sala || 'N/A'}</span>
+                          <span className="text-xs bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-md">Série: {currentStudent.sala || 'N/A'}</span>
                           <span className="text-slate-300">•</span>
-                          <span className="text-xs bg-indigo-50 text-indigo-600 font-bold px-2 py-0.5 rounded-md">Turno: {currentStudent.turno || 'Manhã'}</span>
+                          <span className="text-xs bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-md">Turma: {currentStudent.turma || 'N/A'}</span>
+                          <span className="text-slate-300">•</span>
+                          <span className="text-xs bg-indigo-50 text-indigo-600 font-bold px-2 py-0.5 rounded-md">Turno: {currentStudent.turno || 'Integral'}</span>
                         </div>
                       </div>
                     </div>

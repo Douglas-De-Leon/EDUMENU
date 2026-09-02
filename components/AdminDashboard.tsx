@@ -84,13 +84,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return { name: shift, value: count };
     });
 
-    // Votes per Class (Sala)
-    const salasMap: Record<string, number> = {};
+    // Votes per Class (Turma)
+    const seriesMap: Record<string, number> = {};
     catSelections.forEach(s => {
-      const sName = s.sala || 'Não definida';
-      salasMap[sName] = (salasMap[sName] || 0) + 1;
+      const sName = (s.sala || 'Não definida') + (s.turma ? ` - Turma ${s.turma}` : '');
+      seriesMap[sName] = (seriesMap[sName] || 0) + 1;
     });
-    const votesByClass = Object.entries(salasMap).map(([name, count]) => ({
+    const votesByClass = Object.entries(seriesMap).map(([name, count]) => ({
       name,
       votos: count
     })).sort((a, b) => b.votos - a.votos);
@@ -253,6 +253,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           matricula: s.matricula,
           studentName: studentInfo ? studentInfo.name : 'Aluno Removido',
           sala: s.sala || (studentInfo ? studentInfo.sala : 'N/A'),
+          turma: s.turma || (studentInfo ? studentInfo.turma : 'N/A'),
           turno: s.turno || (studentInfo ? studentInfo.turno : 'N/A'),
           votedFor: optionInfo ? optionInfo.name : 'Opção Removida',
           category: s.category,
@@ -263,7 +264,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         item.studentName.toLowerCase().includes(historySearch.toLowerCase()) ||
         item.votedFor.toLowerCase().includes(historySearch.toLowerCase()) ||
         item.matricula.includes(historySearch) ||
-        item.sala.toLowerCase().includes(historySearch.toLowerCase())
+        item.sala.toLowerCase().includes(historySearch.toLowerCase()) ||
+        (item.turma && item.turma.toLowerCase().includes(historySearch.toLowerCase()))
       )
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   }, [selections, mealOptions, selectedCategory, students, historySearch]);
@@ -607,12 +609,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
 
-          {/* Class Breakdown (Salas) */}
+          {/* Class Breakdown (Séries) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="md:col-span-1 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
               <div>
-                <h3 className="text-lg font-bold text-slate-800">Ranking por Salas</h3>
-                <p className="text-xs text-slate-400">As salas com maior índice de votos participativos</p>
+                <h3 className="text-lg font-bold text-slate-800">Ranking por Turmas</h3>
+                <p className="text-xs text-slate-400">As turmas com maior índice de votos participativos</p>
               </div>
               <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
                 {currentCategoryStats.votesByClass.length > 0 ? (
@@ -639,7 +641,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   })
                 ) : (
                   <div className="text-center text-slate-400 py-12">
-                    <p className="text-sm">Aguardando votos das salas.</p>
+                    <p className="text-sm">Aguardando votos das séries.</p>
                   </div>
                 )}
               </div>
@@ -691,7 +693,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <i className="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
                 <input 
                   type="text" 
-                  placeholder="Buscar por aluno, sala ou candidato..." 
+                  placeholder="Buscar por aluno, série ou candidato..." 
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs"
                   value={historySearch}
                   onChange={e => setHistorySearch(e.target.value)}
@@ -705,7 +707,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <tr>
                     <th className="p-4">Matrícula</th>
                     <th className="p-4">Estudante</th>
-                    <th className="p-4">Sala (Classe)</th>
+                    <th className="p-4">Série</th>
+                    <th className="p-4">Turma</th>
                     <th className="p-4">Turno</th>
                     <th className="p-4">Candidato / Prato Escolhido</th>
                     <th className="p-4">Carimbo de Data</th>
@@ -718,6 +721,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <td className="p-4 font-mono text-xs">{vote.matricula}</td>
                         <td className="p-4 font-bold text-slate-800">{vote.studentName}</td>
                         <td className="p-4 text-slate-600 font-semibold">{vote.sala}</td>
+                        <td className="p-4 text-slate-600 font-semibold">{vote.turma || 'N/A'}</td>
                         <td className="p-4">
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                             vote.turno === 'Manhã' ? 'bg-sky-100 text-sky-700' :

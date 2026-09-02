@@ -14,7 +14,7 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
   onUpdateStudent,
   onDeleteStudent
 }) => {
-  const [newStudent, setNewStudent] = useState<Student>({ matricula: '', name: '', password: '', turno: 'Manhã', sala: '1º Ano A' });
+  const [newStudent, setNewStudent] = useState<Student>({ matricula: '', name: '', password: '', turno: 'Integral', sala: '1º Ano', turma: 'A' });
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [studentToDelete, setStudentToDelete] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -38,7 +38,7 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
     }
 
     onAddStudent(newStudent);
-    setNewStudent({ matricula: '', name: '', password: '', turno: 'Manhã', sala: '1º Ano A' });
+    setNewStudent({ matricula: '', name: '', password: '', turno: 'Integral', sala: '1º Ano', turma: 'A' });
   };
 
   const handleUpdateStudentSubmit = (e: React.FormEvent) => {
@@ -47,7 +47,7 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
 
     onUpdateStudent(editingStudent);
     setEditingStudent(null);
-    setNewStudent({ matricula: '', name: '', password: '', turno: 'Manhã', sala: '1º Ano A' }); // Clear any partial new student data
+    setNewStudent({ matricula: '', name: '', password: '', turno: 'Integral', sala: '1º Ano', turma: 'A' }); // Clear any partial new student data
   };
 
   const confirmDeleteStudent = (matricula: string) => {
@@ -110,7 +110,7 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
               />
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Turno</label>
                 <select
@@ -122,15 +122,12 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
                   }
                   required
                 >
-                  <option value="Manhã">Manhã</option>
-                  <option value="Tarde">Tarde</option>
-                  <option value="Noite">Noite</option>
+                  <option value="Integral">Integral</option>
                 </select>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Sala</label>
-                <input 
-                  type="text" 
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Série</label>
+                <select 
                   className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
                   value={editingStudent ? editingStudent.sala : newStudent.sala}
                   onChange={e => editingStudent 
@@ -138,7 +135,28 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
                     : setNewStudent({...newStudent, sala: e.target.value})
                   }
                   required
-                  placeholder="Ex: 1º Ano A"
+                >
+                  <option value="1º Ano">1º Ano</option>
+                  <option value="2º Ano">2º Ano</option>
+                  <option value="3º Ano">3º Ano</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Turma</label>
+                <input 
+                  type="text" 
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none uppercase"
+                  value={editingStudent ? (editingStudent.turma || '') : (newStudent.turma || '')}
+                  onChange={e => {
+                    const val = e.target.value.toUpperCase().slice(0, 5); // Limit length
+                    if (editingStudent) {
+                      setEditingStudent({...editingStudent, turma: val});
+                    } else {
+                      setNewStudent({...newStudent, turma: val});
+                    }
+                  }}
+                  placeholder="Ex: A"
+                  required
                 />
               </div>
             </div>
@@ -205,7 +223,8 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
                 <tr>
                   <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Matrícula</th>
                   <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Nome</th>
-                  <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Sala</th>
+                  <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Série</th>
+                  <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Turma</th>
                   <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Turno</th>
                   <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Ações</th>
                 </tr>
@@ -225,13 +244,13 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
                         )}
                       </td>
                       <td className="p-4 text-sm text-slate-600 font-semibold">{student.sala || 'N/A'}</td>
+                      <td className="p-4 text-sm text-slate-600 font-semibold">{student.turma || 'N/A'}</td>
                       <td className="p-4">
                         <span className={`text-xs font-bold px-2 py-1 rounded-full ${
-                          (student.turno || 'Manhã') === 'Manhã' ? 'bg-sky-100 text-sky-700' :
-                          (student.turno || 'Manhã') === 'Tarde' ? 'bg-orange-100 text-orange-700' :
+                          (student.turno || 'Integral') === 'Integral' ? 'bg-sky-100 text-sky-700' :
                           'bg-indigo-100 text-indigo-700'
                         }`}>
-                          {student.turno || 'Manhã'}
+                          {student.turno || 'Integral'}
                         </span>
                       </td>
                       <td className="p-4 text-right space-x-2 whitespace-nowrap">

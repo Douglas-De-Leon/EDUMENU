@@ -12,8 +12,8 @@ import { Student, MealOption } from '../types';
 // 1. INSIRA AQUI OS SEUS ALUNOS REAIS
 const realStudentsToSeed: Student[] = [
   // Exemplo de formato:
-  // { matricula: '2024001', name: 'João Silva', password: '123', turno: 'Manhã', sala: '1º Ano A' },
-  // { matricula: '2024002', name: 'Maria Souza', password: '123', turno: 'Tarde', sala: '2º Ano B' },
+  // { matricula: '2024001', name: 'João Silva', password: '123', turno: 'Integral', sala: '1º Ano', turma: 'A' },
+  // { matricula: '2024002', name: 'Maria Souza', password: '123', turno: 'Integral', sala: '2º Ano', turma: 'B' },
 ];
 
 // 2. INSIRA AQUI AS OPÇÕES/CHAPAS/CANDIDATOS REAIS

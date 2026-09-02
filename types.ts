@@ -3,8 +3,9 @@ export interface Student {
   matricula: string;
   name: string;
   password?: string;
-  turno: 'Manhã' | 'Tarde' | 'Noite';
-  sala: string; // e.g. '1º Ano A', '1º Ano B', '2º Ano A', '2º Ano B', '3º Ano A', '3º Ano B'
+  turno: string;
+  sala: string; // e.g. '1º Ano', '2º Ano', '3º Ano'
+  turma?: string; // e.g. 'A', 'B', 'C'
 }
 
 export interface AdminUser {
@@ -28,8 +29,9 @@ export interface Selection {
   mealId: string; // Pointing to the MealOption id
   category: 'Alimentação' | 'Gremio' | 'Representante' | 'Outros';
   timestamp: string; // ISO format
-  turno: 'Manhã' | 'Tarde' | 'Noite';
+  turno: string;
   sala: string;
+  turma?: string;
 }
 
 export interface AppState {
