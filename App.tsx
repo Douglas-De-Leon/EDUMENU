@@ -266,7 +266,6 @@ const App: React.FC = () => {
     setLoginId('');
     setLoginPassword('');
     setSelectedMealId(null);
-    setAiTip('');
     setError(null);
     setLoginStep('role_selection');
     localStorage.removeItem('userRole');

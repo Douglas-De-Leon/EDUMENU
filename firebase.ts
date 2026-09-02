@@ -4,15 +4,18 @@ import { getAuth } from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCLadD0S9JLKvOH-Qe2eRin-T25lZb0Uxk",
-  authDomain: "edumenu-7310d.firebaseapp.com",
-  projectId: "edumenu-7310d",
-  storageBucket: "edumenu-7310d.firebasestorage.app",
-  messagingSenderId: "550246472437",
-  appId: "1:550246472437:web:086e9aafe4486f5b2643bc"
+   apiKey: "AIzaSyA1fHcDrcuX1Df73EIU7qV2lMyZbi-R9Xw",
+  authDomain: "eduvotacao-d2486.firebaseapp.com",
+  projectId: "eduvotacao-d2486",
+  storageBucket: "eduvotacao-d2486.firebasestorage.app",
+  messagingSenderId: "845927518919",
+  appId: "1:845927518919:web:933baa73d8b602f58da4e2"
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
+
+
+
