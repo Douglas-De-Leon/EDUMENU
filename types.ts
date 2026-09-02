@@ -1,11 +1,17 @@
+export interface School {
+  id: string;
+  name: string;
+  createdAt?: string;
+}
 
 export interface Student {
   matricula: string;
   name: string;
   password?: string;
   turno: string;
-  sala: string; // e.g. '1º Ano', '2º Ano', '3º Ano'
-  turma?: string; // e.g. 'A', 'B', 'C'
+  sala: string;
+  turma?: string;
+  schoolId?: string; // Optional for backward compatibility with existing records
 }
 
 export interface AdminUser {
@@ -13,6 +19,7 @@ export interface AdminUser {
   login: string;
   name: string;
   password?: string;
+  schoolId?: string; // Which school this admin belongs to
 }
 
 export interface MealOption {
@@ -20,18 +27,20 @@ export interface MealOption {
   name: string;
   description: string;
   category: 'Alimentação' | 'Gremio' | 'Representante' | 'Outros';
-  calories?: string; // Identification (e.g. 'Chapa 10', 'Opção 1')
+  calories?: string;
   active?: boolean;
+  schoolId?: string;
 }
 
 export interface Selection {
   matricula: string;
-  mealId: string; // Pointing to the MealOption id
+  mealId: string;
   category: 'Alimentação' | 'Gremio' | 'Representante' | 'Outros';
-  timestamp: string; // ISO format
+  timestamp: string;
   turno: string;
   sala: string;
   turma?: string;
+  schoolId?: string;
 }
 
 export interface AppState {
@@ -39,5 +48,5 @@ export interface AppState {
   selections: Selection[];
   registeredStudents: Student[];
   mealOptions: MealOption[];
+  schools: School[];
 }
-

@@ -6,7 +6,7 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { UserManagementDashboard } from './components/UserManagementDashboard';
 import { MasterDashboard } from './components/MasterDashboard';
 import { LandingPage } from './components/LandingPage';
-import { Student, Selection, MealOption, AdminUser } from './types';
+import { Student, Selection, MealOption, AdminUser, School } from './types';
 import { MEAL_OPTIONS, INITIAL_STUDENTS } from './constants';
 import { db } from './firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, getDoc, getDocs } from 'firebase/firestore';
@@ -29,12 +29,20 @@ const App: React.FC = () => {
   });
   const [registeredStudents, setRegisteredStudents] = useState<Student[]>(INITIAL_STUDENTS);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [schools, setSchools] = useState<School[]>([]);
+  const [currentSchoolId, setCurrentSchoolId] = useState<string | null>(() => {
+    return localStorage.getItem('currentSchoolId') || null;
+  });
   const [selections, setSelections] = useState<Selection[]>([]);
   const [mealOptions, setMealOptions] = useState<MealOption[]>(MEAL_OPTIONS);
   const [selectedCategory, setSelectedCategory] = useState<'Gremio' | 'Representante' | 'Alimentação' | 'Outros'>('Gremio');
   const [showSummary, setShowSummary] = useState(false);
   const [selectedMealId, setSelectedMealId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const schoolMealOptions = mealOptions.filter(m => userRole === 'master' || m.schoolId === currentSchoolId);
+  const schoolSelections = selections.filter(s => userRole === 'master' || s.schoolId === currentSchoolId);
+  const schoolStudents = registeredStudents.filter(s => userRole === 'master' || s.schoolId === currentSchoolId);
 
   // Persistence (Firestore)
   useEffect(() => {
@@ -59,6 +67,16 @@ const App: React.FC = () => {
       if (error.message?.includes('permission')) {
         setError('Acesso negado ao Firebase: Leia as instruções do assistente para alterar as Regras de Segurança do Firestore.');
       }
+    });
+
+    const unsubSchools = onSnapshot(collection(db, 'schools'), (snapshot) => {
+      const schoolsData: School[] = [];
+      snapshot.forEach((doc) => {
+        schoolsData.push(doc.data() as School);
+      });
+      setSchools(schoolsData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'schools');
     });
 
     const unsubAdmins = onSnapshot(collection(db, 'admins'), (snapshot) => {
@@ -116,6 +134,7 @@ const App: React.FC = () => {
     });
 
     return () => {
+      unsubSchools();
       unsubStudents();
       unsubAdmins();
       unsubMeals();
@@ -138,6 +157,10 @@ const App: React.FC = () => {
         setUserRole('student');
         setCurrentStudent(student);
         setView('student');
+        if (student.schoolId) {
+          setCurrentSchoolId(student.schoolId);
+          localStorage.setItem('currentSchoolId', student.schoolId);
+        }
         localStorage.setItem('userRole', 'student');
         localStorage.setItem('view', 'student');
         localStorage.setItem('currentStudent', JSON.stringify(student));
@@ -155,6 +178,10 @@ const App: React.FC = () => {
         if (admin) {
           setUserRole('admin');
           setView('admin');
+          if (admin.schoolId) {
+            setCurrentSchoolId(admin.schoolId);
+            localStorage.setItem('currentSchoolId', admin.schoolId);
+          }
           localStorage.setItem('userRole', 'admin');
           localStorage.setItem('view', 'admin');
         } else {
@@ -171,7 +198,8 @@ const App: React.FC = () => {
 
   const handleAddMeal = async (meal: MealOption) => {
     try {
-      await setDoc(doc(db, 'meals', meal.id), meal);
+      const mealToSave = { ...meal, schoolId: currentSchoolId || meal.schoolId || '' };
+      await setDoc(doc(db, 'meals', meal.id), mealToSave);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `meals/${meal.id}`);
     }
@@ -179,7 +207,8 @@ const App: React.FC = () => {
 
   const handleUpdateMeal = async (meal: MealOption) => {
     try {
-      await setDoc(doc(db, 'meals', meal.id), meal);
+      const mealToSave = { ...meal, schoolId: currentSchoolId || meal.schoolId || '' };
+      await setDoc(doc(db, 'meals', meal.id), mealToSave);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `meals/${meal.id}`);
     }
@@ -195,7 +224,8 @@ const App: React.FC = () => {
 
   const handleAddStudent = async (student: Student) => {
     try {
-      await setDoc(doc(db, 'students', student.matricula), student);
+      const studentToSave = { ...student, schoolId: currentSchoolId || student.schoolId || '' };
+      await setDoc(doc(db, 'students', student.matricula), studentToSave);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `students/${student.matricula}`);
     }
@@ -203,7 +233,8 @@ const App: React.FC = () => {
 
   const handleUpdateStudent = async (student: Student) => {
     try {
-      await setDoc(doc(db, 'students', student.matricula), student);
+      const studentToSave = { ...student, schoolId: currentSchoolId || student.schoolId || '' };
+      await setDoc(doc(db, 'students', student.matricula), studentToSave);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `students/${student.matricula}`);
     }
@@ -214,6 +245,22 @@ const App: React.FC = () => {
       await deleteDoc(doc(db, 'students', matricula));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `students/${matricula}`);
+    }
+  };
+
+  const handleAddSchool = async (school: School) => {
+    try {
+      await setDoc(doc(db, 'schools', school.id), school);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `schools/${school.id}`);
+    }
+  };
+
+  const handleDeleteSchool = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'schools', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `schools/${id}`);
     }
   };
 
@@ -236,7 +283,7 @@ const App: React.FC = () => {
   const confirmSelection = async () => {
     if (!currentStudent || !selectedMealId) return;
 
-    const alreadyVoted = selections.some(
+    const alreadyVoted = schoolSelections.some(
       s => s.matricula === currentStudent.matricula && s.category === selectedCategory
     );
     if (alreadyVoted) {
@@ -251,7 +298,8 @@ const App: React.FC = () => {
       timestamp: new Date().toISOString(),
       turno: currentStudent.turno || 'Integral',
       sala: currentStudent.sala || '1º Ano',
-      turma: currentStudent.turma || 'A'
+      turma: currentStudent.turma || 'A',
+      schoolId: currentSchoolId || currentStudent.schoolId || ''
     };
 
     try {
@@ -269,19 +317,21 @@ const App: React.FC = () => {
     setLoginPassword('');
     setSelectedMealId(null);
     setError(null);
-    setLoginStep('role_selection');
+    setLoginStep('landing');
+    setCurrentSchoolId(null);
     localStorage.removeItem('userRole');
     localStorage.removeItem('view');
     localStorage.removeItem('currentStudent');
+    localStorage.removeItem('currentSchoolId');
   };
 
   // Only show active options belonging to the currently selected category
   const activeMeals = useMemo(() => {
-    return mealOptions.filter(m => m.active && m.category === selectedCategory);
-  }, [mealOptions, selectedCategory]);
+    return schoolMealOptions.filter(m => m.active && m.category === selectedCategory);
+  }, [schoolMealOptions, selectedCategory]);
 
   const hasAlreadyVoted = useMemo(() => {
-    return selections.some(
+    return schoolSelections.some(
       s => s.matricula === currentStudent?.matricula && s.category === selectedCategory
     );
   }, [selections, currentStudent, selectedCategory]);
@@ -289,7 +339,7 @@ const App: React.FC = () => {
   const nextPendingCategory = useMemo(() => {
     const categories: ('Gremio' | 'Representante' | 'Alimentação' | 'Outros')[] = ['Gremio', 'Representante', 'Alimentação', 'Outros'];
     return categories.find(cat => {
-      const hasVoted = selections.some(s => s.matricula === currentStudent?.matricula && s.category === cat);
+      const hasVoted = schoolSelections.some(s => s.matricula === currentStudent?.matricula && s.category === cat);
       return !hasVoted;
     });
   }, [selections, currentStudent]);
@@ -305,6 +355,7 @@ const App: React.FC = () => {
   const handleExit = () => {
     logout();
   };
+
 
   if (!userRole) {
     if (loginStep === 'landing') {
@@ -464,7 +515,14 @@ const App: React.FC = () => {
              </div>
              <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Perfil de Acesso</p>
-                <p className="font-bold text-slate-800">{userRole === 'student' ? 'Portal do Aluno' : userRole === 'master' ? 'Usuário Master' : 'Gestão Administrativa'}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-bold text-slate-800">{userRole === 'student' ? 'Portal do Aluno' : userRole === 'master' ? 'Usuário Master' : 'Gestão Administrativa'}</p>
+                  {currentSchoolId && (
+                    <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      {schools.find(s => s.id === currentSchoolId)?.name || 'Escola'}
+                    </span>
+                  )}
+                </div>
              </div>
           </div>
           
@@ -483,23 +541,26 @@ const App: React.FC = () => {
 
         {userRole === 'master' ? (
           <MasterDashboard 
+            schools={schools}
             admins={adminUsers}
+            onAddSchool={handleAddSchool}
+            onDeleteSchool={handleDeleteSchool}
             onAddAdmin={handleAddAdmin}
             onDeleteAdmin={handleDeleteAdmin}
           />
         ) : userRole === 'admin' ? (
           view === 'admin' ? (
             <AdminDashboard 
-              selections={selections} 
-              mealOptions={mealOptions} 
+              selections={schoolSelections} 
+              mealOptions={schoolMealOptions} 
               onAddMeal={handleAddMeal}
               onUpdateMeal={handleUpdateMeal}
               onDeleteMeal={handleDeleteMeal}
-              students={registeredStudents}
+              students={schoolStudents}
             />
           ) : (
             <UserManagementDashboard 
-              students={registeredStudents}
+              students={schoolStudents}
               onAddStudent={handleAddStudent}
               onUpdateStudent={handleUpdateStudent}
               onDeleteStudent={handleDeleteStudent}
@@ -521,7 +582,7 @@ const App: React.FC = () => {
             {!currentStudent ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center max-w-4xl mx-auto">
                 <div className="order-2 md:order-1 md:col-span-2">
-                  <StatsDashboard selections={selections} mealOptions={mealOptions} />
+                  <StatsDashboard selections={schoolSelections} mealOptions={schoolMealOptions} />
                 </div>
               </div>
             ) : (
@@ -558,7 +619,7 @@ const App: React.FC = () => {
                     <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Cédulas Disponíveis</h4>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       {(['Gremio', 'Representante', 'Alimentação', 'Outros'] as const).map((cat) => {
-                        const votedInThisCat = selections.some(
+                        const votedInThisCat = schoolSelections.some(
                           s => s.matricula === currentStudent.matricula && s.category === cat
                         );
                         const isSelected = selectedCategory === cat && !showSummary;
@@ -606,8 +667,8 @@ const App: React.FC = () => {
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {(['Gremio', 'Representante', 'Alimentação', 'Outros'] as const).map((cat) => {
-                          const vote = selections.find(s => s.matricula === currentStudent.matricula && s.category === cat);
-                          const meal = vote ? mealOptions.find(m => m.id === vote.mealId) : null;
+                          const vote = schoolSelections.find(s => s.matricula === currentStudent.matricula && s.category === cat);
+                          const meal = vote ? schoolMealOptions.find(m => m.id === vote.mealId) : null;
                           
                           return (
                             <div key={cat} className="bg-white p-5 rounded-2xl border border-slate-200 flex items-center gap-4 shadow-sm hover:shadow-md transition-shadow">
@@ -735,7 +796,7 @@ const App: React.FC = () => {
 
                 {/* Sidebar Stats */}
                 <div className="space-y-6">
-                   <StatsDashboard selections={selections} mealOptions={mealOptions} />
+                   <StatsDashboard selections={schoolSelections} mealOptions={schoolMealOptions} />
                 </div>
               </div>
             )}
