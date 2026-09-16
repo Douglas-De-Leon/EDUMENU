@@ -27,6 +27,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   
   // Category filter for the results dashboard
   const [selectedCategory, setSelectedCategory] = useState<'Gremio' | 'Representante' | 'Alimentação' | 'Outros'>('Gremio');
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  });
 
   // New option form state
   const [newMeal, setNewMeal] = useState<Partial<MealOption>>({
@@ -64,7 +68,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const currentCategoryStats = useMemo(() => {
     // Filter options & selections for active category
     const catOptions = mealOptions.filter(m => m.category === selectedCategory);
-    const catSelections = selections.filter(s => s.category === selectedCategory);
+    
+    // Parse selectedDate properly in local timezone to avoid UTC shifts
+    const [year, month, day] = selectedDate.split('-').map(Number);
+    const targetDate = new Date(year, month - 1, day);
+    const targetDateStr = targetDate.toLocaleDateString('pt-BR');
+
+    const catSelections = selections.filter(s => {
+      if (s.category !== selectedCategory) return false;
+      if (!s.timestamp) return false;
+      const voteDate = new Date(s.timestamp);
+      return voteDate.toLocaleDateString('pt-BR') === targetDateStr;
+    });
 
     // Votes per Option/Candidate
     const votesByOption = catOptions.map(option => {
@@ -114,7 +129,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       winningOption,
       participationRate
     };
-  }, [selections, mealOptions, selectedCategory, students]);
+  }, [selections, mealOptions, selectedCategory, students, selectedDate]);
 
   // Daily Frequency of all Votes (General history trend)
   const votesTrendData = useMemo(() => {
@@ -135,7 +150,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const temporalStats = useMemo(() => {
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = now.toLocaleDateString('pt-BR');
     
     // Start of the week (Sunday)
     const currentDay = now.getDay();
@@ -166,9 +181,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     let catVotesMonth = 0;
     let catVotesYear = 0;
 
+    const catUniqueVotersToday = new Set();
+    const catUniqueVotersWeek = new Set();
+    const catUniqueVotersMonth = new Set();
+    const catUniqueVotersYear = new Set();
+
     selections.forEach(s => {
       const voteDate = new Date(s.timestamp);
-      const isToday = s.timestamp && s.timestamp.startsWith(todayStr);
+      const isToday = voteDate.toLocaleDateString('pt-BR') === todayStr;
       const isWeek = voteDate >= startOfWeek;
       const isMonth = voteDate >= startOfMonth;
       const isYear = voteDate >= startOfYear;
@@ -177,34 +197,50 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (isToday) {
         votesToday++;
         uniqueVotersToday.add(s.matricula);
-        if (isCategory) catVotesToday++;
+        if (isCategory) {
+          catVotesToday++;
+          catUniqueVotersToday.add(s.matricula);
+        }
       }
       if (isWeek) {
         votesWeek++;
         uniqueVotersWeek.add(s.matricula);
-        if (isCategory) catVotesWeek++;
+        if (isCategory) {
+          catVotesWeek++;
+          catUniqueVotersWeek.add(s.matricula);
+        }
       }
       if (isMonth) {
         votesMonth++;
         uniqueVotersMonth.add(s.matricula);
-        if (isCategory) catVotesMonth++;
+        if (isCategory) {
+          catVotesMonth++;
+          catUniqueVotersMonth.add(s.matricula);
+        }
       }
       if (isYear) {
         votesYear++;
         uniqueVotersYear.add(s.matricula);
-        if (isCategory) catVotesYear++;
+        if (isCategory) {
+          catVotesYear++;
+          catUniqueVotersYear.add(s.matricula);
+        }
       }
     });
 
     return {
       votesToday, catVotesToday,
       uniqueVotersToday: uniqueVotersToday.size,
+      catUniqueVotersToday: catUniqueVotersToday.size,
       votesWeek, catVotesWeek,
       uniqueVotersWeek: uniqueVotersWeek.size,
+      catUniqueVotersWeek: catUniqueVotersWeek.size,
       votesMonth, catVotesMonth,
       uniqueVotersMonth: uniqueVotersMonth.size,
+      catUniqueVotersMonth: catUniqueVotersMonth.size,
       votesYear, catVotesYear,
       uniqueVotersYear: uniqueVotersYear.size,
+      catUniqueVotersYear: catUniqueVotersYear.size,
     };
   }, [selections, selectedCategory]);
 
@@ -340,10 +376,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {activeTab === 'analytics' && (
         <div className="space-y-8">
-          {/* Global Temporal Metrics Row */}
+          {/* Category Temporal Metrics Row */}
           <div className="space-y-2">
             <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-              <i className="fas fa-globe-americas"></i> Engajamento Global vs Categoria ({getCategoryLabel(selectedCategory)})
+              <i className="fas fa-chart-pie"></i> Engajamento da Categoria ({getCategoryLabel(selectedCategory)})
             </h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-gradient-to-br from-indigo-500 to-blue-600 p-5 rounded-2xl text-white shadow-md relative overflow-hidden flex flex-col justify-between">
@@ -351,15 +387,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <p className="text-xs font-black uppercase tracking-widest text-indigo-100 mb-1">Hoje</p>
                 <div>
                   <div className="flex items-end gap-2 mb-1">
-                    <span className="text-3xl font-extrabold">{temporalStats.votesToday}</span>
-                    <span className="text-xs font-medium text-indigo-100 mb-1.5 uppercase tracking-wide">Votos Totais</span>
+                    <span className="text-3xl font-extrabold">{temporalStats.catVotesToday}</span>
+                    <span className="text-xs font-medium text-indigo-100 mb-1.5 uppercase tracking-wide">Votos na Categoria</span>
                   </div>
                   <p className="text-xs font-medium text-indigo-100 bg-black/10 inline-block px-2 py-0.5 rounded-full mb-3">
-                    {temporalStats.uniqueVotersToday} alunos ({((temporalStats.uniqueVotersToday / (totalRegisteredStudents || 1)) * 100).toFixed(1)}%)
+                    {temporalStats.catUniqueVotersToday} alunos
                   </p>
                   <div className="border-t border-white/20 pt-2 flex justify-between items-center text-sm">
-                    <span className="font-medium text-indigo-100">Nesta Categoria:</span>
-                    <span className="font-bold">{temporalStats.catVotesToday} ({temporalStats.votesToday > 0 ? ((temporalStats.catVotesToday / temporalStats.votesToday) * 100).toFixed(0) : 0}%)</span>
+                    <span className="font-medium text-indigo-100">Votos Globais (Todas):</span>
+                    <span className="font-bold">{temporalStats.votesToday}</span>
                   </div>
                 </div>
               </div>
@@ -369,15 +405,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <p className="text-xs font-black uppercase tracking-widest text-emerald-100 mb-1">Na Semana</p>
                 <div>
                   <div className="flex items-end gap-2 mb-1">
-                    <span className="text-3xl font-extrabold">{temporalStats.votesWeek}</span>
-                    <span className="text-xs font-medium text-emerald-100 mb-1.5 uppercase tracking-wide">Votos Totais</span>
+                    <span className="text-3xl font-extrabold">{temporalStats.catVotesWeek}</span>
+                    <span className="text-xs font-medium text-emerald-100 mb-1.5 uppercase tracking-wide">Votos na Categoria</span>
                   </div>
                   <p className="text-xs font-medium text-emerald-100 bg-black/10 inline-block px-2 py-0.5 rounded-full mb-3">
-                    {temporalStats.uniqueVotersWeek} alunos ({((temporalStats.uniqueVotersWeek / (totalRegisteredStudents || 1)) * 100).toFixed(1)}%)
+                    {temporalStats.catUniqueVotersWeek} alunos
                   </p>
                   <div className="border-t border-white/20 pt-2 flex justify-between items-center text-sm">
-                    <span className="font-medium text-emerald-100">Nesta Categoria:</span>
-                    <span className="font-bold">{temporalStats.catVotesWeek} ({temporalStats.votesWeek > 0 ? ((temporalStats.catVotesWeek / temporalStats.votesWeek) * 100).toFixed(0) : 0}%)</span>
+                    <span className="font-medium text-emerald-100">Votos Globais (Todas):</span>
+                    <span className="font-bold">{temporalStats.votesWeek}</span>
                   </div>
                 </div>
               </div>
@@ -387,15 +423,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <p className="text-xs font-black uppercase tracking-widest text-amber-100 mb-1">No Mês</p>
                 <div>
                   <div className="flex items-end gap-2 mb-1">
-                    <span className="text-3xl font-extrabold">{temporalStats.votesMonth}</span>
-                    <span className="text-xs font-medium text-amber-100 mb-1.5 uppercase tracking-wide">Votos Totais</span>
+                    <span className="text-3xl font-extrabold">{temporalStats.catVotesMonth}</span>
+                    <span className="text-xs font-medium text-amber-100 mb-1.5 uppercase tracking-wide">Votos na Categoria</span>
                   </div>
                   <p className="text-xs font-medium text-amber-100 bg-black/10 inline-block px-2 py-0.5 rounded-full mb-3">
-                    {temporalStats.uniqueVotersMonth} alunos ({((temporalStats.uniqueVotersMonth / (totalRegisteredStudents || 1)) * 100).toFixed(1)}%)
+                    {temporalStats.catUniqueVotersMonth} alunos
                   </p>
                   <div className="border-t border-white/20 pt-2 flex justify-between items-center text-sm">
-                    <span className="font-medium text-amber-100">Nesta Categoria:</span>
-                    <span className="font-bold">{temporalStats.catVotesMonth} ({temporalStats.votesMonth > 0 ? ((temporalStats.catVotesMonth / temporalStats.votesMonth) * 100).toFixed(0) : 0}%)</span>
+                    <span className="font-medium text-amber-100">Votos Globais (Todas):</span>
+                    <span className="font-bold">{temporalStats.votesMonth}</span>
                   </div>
                 </div>
               </div>
@@ -405,29 +441,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <p className="text-xs font-black uppercase tracking-widest text-purple-100 mb-1">No Ano</p>
                 <div>
                   <div className="flex items-end gap-2 mb-1">
-                    <span className="text-3xl font-extrabold">{temporalStats.votesYear}</span>
-                    <span className="text-xs font-medium text-purple-100 mb-1.5 uppercase tracking-wide">Votos Totais</span>
+                    <span className="text-3xl font-extrabold">{temporalStats.catVotesYear}</span>
+                    <span className="text-xs font-medium text-purple-100 mb-1.5 uppercase tracking-wide">Votos na Categoria</span>
                   </div>
                   <p className="text-xs font-medium text-purple-100 bg-black/10 inline-block px-2 py-0.5 rounded-full mb-3">
-                    {temporalStats.uniqueVotersYear} alunos ({((temporalStats.uniqueVotersYear / (totalRegisteredStudents || 1)) * 100).toFixed(1)}%)
+                    {temporalStats.catUniqueVotersYear} alunos
                   </p>
                   <div className="border-t border-white/20 pt-2 flex justify-between items-center text-sm">
-                    <span className="font-medium text-purple-100">Nesta Categoria:</span>
-                    <span className="font-bold">{temporalStats.catVotesYear} ({temporalStats.votesYear > 0 ? ((temporalStats.catVotesYear / temporalStats.votesYear) * 100).toFixed(0) : 0}%)</span>
+                    <span className="font-medium text-purple-100">Votos Globais (Todas):</span>
+                    <span className="font-bold">{temporalStats.votesYear}</span>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Categories Horizontal Interactive Switcher */}
-          <div className="space-y-2">
-            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Filtrar Apuração por Categoria</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {/* Filters: Category and Date */}
+          <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6">
+            <div className="space-y-2 flex-1 w-full">
+              <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Filtrar Apuração por Categoria</h4>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {categoryOptions.map((cat) => {
                 const isActive = selectedCategory === cat;
                 const themeColor = getCategoryThemeColor(cat);
-                const votesCount = selections.filter(s => s.category === cat).length;
+                
+                const [year, month, day] = selectedDate.split('-').map(Number);
+                const targetDate = new Date(year, month - 1, day);
+                const targetDateStr = targetDate.toLocaleDateString('pt-BR');
+                
+                const votesCount = selections.filter(s => {
+                  if (s.category !== cat) return false;
+                  if (!s.timestamp) return false;
+                  return new Date(s.timestamp).toLocaleDateString('pt-BR') === targetDateStr;
+                }).length;
                 
                 return (
                   <button
@@ -462,6 +508,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </button>
                 );
               })}
+            </div>
+            </div>
+
+            <div className="space-y-2 w-full xl:w-64 shrink-0">
+              <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Data da Apuração</h4>
+              <div className="bg-white border-2 border-slate-100 rounded-2xl p-4 flex items-center gap-3 transition-all focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-500/10">
+                <i className="fas fa-calendar-alt text-slate-400"></i>
+                <input 
+                  type="date" 
+                  value={selectedDate} 
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="bg-transparent border-none outline-none text-sm font-bold text-slate-700 w-full cursor-pointer"
+                />
+              </div>
             </div>
           </div>
 
