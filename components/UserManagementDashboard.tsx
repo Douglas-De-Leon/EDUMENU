@@ -18,15 +18,19 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [studentToDelete, setStudentToDelete] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
   const nameInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
+  
+  const editingMatricula = editingStudent?.matricula;
 
   useEffect(() => {
-    if (editingStudent && nameInputRef.current) {
+    if (editingMatricula && nameInputRef.current) {
       nameInputRef.current.focus();
       formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }, [editingStudent]);
+  }, [editingMatricula]);
 
   const handleAddStudent = (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,17 +167,26 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
 
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Senha</label>
-              <input 
-                type="password" 
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                value={editingStudent ? (editingStudent.password || '') : (newStudent.password || '')}
-                onChange={e => editingStudent 
-                  ? setEditingStudent({...editingStudent, password: e.target.value})
-                  : setNewStudent({...newStudent, password: e.target.value})
-                }
-                required
-                placeholder="***"
-              />
+              <div className="relative">
+                <input 
+                  type={showPassword ? "text" : "password"}
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none pr-10"
+                  value={editingStudent ? (editingStudent.password || '') : (newStudent.password || '')}
+                  onChange={e => editingStudent 
+                    ? setEditingStudent({...editingStudent, password: e.target.value})
+                    : setNewStudent({...newStudent, password: e.target.value})
+                  }
+                  required
+                  placeholder="***"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 px-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                >
+                  <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                </button>
+              </div>
             </div>
             
             <div className="flex gap-2">
