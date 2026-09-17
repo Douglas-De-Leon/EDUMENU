@@ -7,6 +7,7 @@ interface MasterDashboardProps {
   onAddSchool: (school: School) => void;
   onDeleteSchool: (id: string) => void;
   onAddAdmin: (admin: AdminUser) => void;
+  onUpdateAdmin?: (admin: AdminUser) => void;
   onDeleteAdmin: (id: string) => void;
 }
 
@@ -16,10 +17,12 @@ export const MasterDashboard: React.FC<MasterDashboardProps> = ({
   onAddSchool, 
   onDeleteSchool, 
   onAddAdmin, 
+  onUpdateAdmin,
   onDeleteAdmin 
 }) => {
   const [newSchoolName, setNewSchoolName] = useState('');
   const [newAdmin, setNewAdmin] = useState<AdminUser>({ id: '', login: '', name: '', password: '', schoolId: '' });
+  const [editingAdmin, setEditingAdmin] = useState<AdminUser | null>(null);
   const [activeTab, setActiveTab] = useState<'schools' | 'admins'>('schools');
 
   const handleAddSchool = (e: React.FormEvent) => {
@@ -45,6 +48,21 @@ export const MasterDashboard: React.FC<MasterDashboardProps> = ({
     
     onAddAdmin({ ...newAdmin, id: Date.now().toString() });
     setNewAdmin({ id: '', login: '', name: '', password: '', schoolId: '' });
+  };
+
+  const handleUpdateAdminSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAdmin || !editingAdmin.login || !editingAdmin.name || !editingAdmin.schoolId) return;
+    
+    if (admins.some(a => a.login === editingAdmin.login && a.id !== editingAdmin.id)) {
+      alert('Login já cadastrado para outro gestor!');
+      return;
+    }
+    
+    if (onUpdateAdmin) {
+      onUpdateAdmin(editingAdmin);
+    }
+    setEditingAdmin(null);
   };
 
   const handleDeleteSchool = (id: string) => {
@@ -228,22 +246,96 @@ export const MasterDashboard: React.FC<MasterDashboardProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {admins.length > 0 ? (
                 admins.map(admin => (
-                  <div key={admin.id} className="flex justify-between items-center p-5 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-white hover:shadow-md hover:border-indigo-100 transition-all">
-                    <div className="overflow-hidden">
-                      <p className="font-bold text-slate-800 truncate">{admin.name}</p>
-                      <p className="text-xs text-indigo-600 font-bold uppercase tracking-wider mt-1 truncate">
-                        {getSchoolName(admin.schoolId)}
-                      </p>
-                      <p className="text-sm text-slate-500 font-mono mt-1 break-all">Login: {admin.login}</p>
+                  editingAdmin?.id === admin.id ? (
+                    <div key={admin.id} className="md:col-span-2 p-5 bg-white rounded-2xl border-2 border-indigo-500 shadow-lg">
+                      <h4 className="font-bold text-slate-800 mb-4 text-sm uppercase tracking-wider">Editar Gestor</h4>
+                      <form onSubmit={handleUpdateAdminSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Nome do Gestor</label>
+                          <input 
+                            required
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                            value={editingAdmin.name}
+                            onChange={e => setEditingAdmin({...editingAdmin, name: e.target.value})}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Escola</label>
+                          <select 
+                            required
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                            value={editingAdmin.schoolId}
+                            onChange={e => setEditingAdmin({...editingAdmin, schoolId: e.target.value})}
+                          >
+                            <option value="">Selecione a Escola</option>
+                            {schools.map(school => (
+                              <option key={school.id} value={school.id}>{school.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Login</label>
+                          <input 
+                            required
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                            value={editingAdmin.login}
+                            onChange={e => setEditingAdmin({...editingAdmin, login: e.target.value})}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Nova Senha (Opcional)</label>
+                          <input 
+                            type="password"
+                            placeholder="Deixe em branco para manter"
+                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                            value={editingAdmin.password || ''}
+                            onChange={e => setEditingAdmin({...editingAdmin, password: e.target.value})}
+                          />
+                        </div>
+                        <div className="md:col-span-2 flex justify-end gap-3 mt-2">
+                          <button 
+                            type="button" 
+                            onClick={() => setEditingAdmin(null)}
+                            className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all"
+                          >
+                            Cancelar
+                          </button>
+                          <button 
+                            type="submit"
+                            className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md transition-all"
+                          >
+                            Salvar Alterações
+                          </button>
+                        </div>
+                      </form>
                     </div>
-                    <button 
-                      onClick={() => handleDeleteAdmin(admin.id)}
-                      className="ml-4 flex-shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50 w-10 h-10 flex items-center justify-center rounded-xl transition-colors"
-                      title="Excluir Gestor"
-                    >
-                      <i className="fas fa-trash"></i>
-                    </button>
-                  </div>
+                  ) : (
+                    <div key={admin.id} className="flex justify-between items-center p-5 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-white hover:shadow-md hover:border-indigo-100 transition-all">
+                      <div className="overflow-hidden">
+                        <p className="font-bold text-slate-800 truncate">{admin.name}</p>
+                        <p className="text-xs text-indigo-600 font-bold uppercase tracking-wider mt-1 truncate">
+                          {getSchoolName(admin.schoolId)}
+                        </p>
+                        <p className="text-sm text-slate-500 font-mono mt-1 break-all">Login: {admin.login}</p>
+                      </div>
+                      <div className="flex">
+                        <button 
+                          onClick={() => setEditingAdmin(admin)}
+                          className="ml-2 flex-shrink-0 text-blue-500 hover:text-blue-700 hover:bg-blue-50 w-10 h-10 flex items-center justify-center rounded-xl transition-colors"
+                          title="Editar Gestor"
+                        >
+                          <i className="fas fa-edit"></i>
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteAdmin(admin.id)}
+                          className="ml-2 flex-shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50 w-10 h-10 flex items-center justify-center rounded-xl transition-colors"
+                          title="Excluir Gestor"
+                        >
+                          <i className="fas fa-trash"></i>
+                        </button>
+                      </div>
+                    </div>
+                  )
                 ))
               ) : (
                 <p className="md:col-span-2 text-center text-slate-400 py-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200">

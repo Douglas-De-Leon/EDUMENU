@@ -40,106 +40,85 @@ const App: React.FC = () => {
   const [selectedMealId, setSelectedMealId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const schoolMealOptions = mealOptions.filter(m => userRole === 'master' || m.schoolId === currentSchoolId);
-  const schoolSelections = selections.filter(s => userRole === 'master' || s.schoolId === currentSchoolId);
-  const schoolStudents = registeredStudents.filter(s => userRole === 'master' || s.schoolId === currentSchoolId);
+  const schoolMealOptions = mealOptions.filter(m => userRole === 'master' || (currentSchoolId && m.schoolId === currentSchoolId));
+  const schoolSelections = selections.filter(s => userRole === 'master' || (currentSchoolId && s.schoolId === currentSchoolId));
+  const schoolStudents = registeredStudents.filter(s => userRole === 'master' || (currentSchoolId && s.schoolId === currentSchoolId));
 
   // Persistence (Firestore)
   useEffect(() => {
-    const unsubStudents = onSnapshot(collection(db, 'students'), (snapshot) => {
-      const studentsData: Student[] = [];
-      snapshot.forEach((doc) => {
-        const s = doc.data() as Student;
-        studentsData.push({
-          ...s,
-          turno: s.turno || 'Integral',
-          sala: s.sala || '1º Ano',
-          turma: s.turma || 'A'
+    const fetchInitialData = async () => {
+      try {
+        const [studentsSnap, schoolsSnap, adminsSnap, mealsSnap, selectionsSnap] = await Promise.all([
+          getDocs(collection(db, 'students')),
+          getDocs(collection(db, 'schools')),
+          getDocs(collection(db, 'admins')),
+          getDocs(collection(db, 'meals')),
+          getDocs(collection(db, 'selections'))
+        ]);
+
+        const studentsData: Student[] = [];
+        studentsSnap.forEach((doc) => {
+          const s = doc.data() as Student;
+          studentsData.push({
+            ...s,
+            turno: s.turno || 'Integral',
+            sala: s.sala || '1º Ano',
+            turma: s.turma || 'A'
+          });
         });
-      });
-      if (studentsData.length > 0) {
-        setRegisteredStudents(studentsData);
-      } else {
-        setRegisteredStudents([]);
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'students');
-      if (error.message?.includes('permission')) {
-        setError('Acesso negado ao Firebase: Leia as instruções do assistente para alterar as Regras de Segurança do Firestore.');
-      }
-    });
+        if (studentsData.length > 0) {
+          setRegisteredStudents(studentsData);
+        } else {
+          setRegisteredStudents([]);
+        }
 
-    const unsubSchools = onSnapshot(collection(db, 'schools'), (snapshot) => {
-      const schoolsData: School[] = [];
-      snapshot.forEach((doc) => {
-        schoolsData.push(doc.data() as School);
-      });
-      setSchools(schoolsData);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'schools');
-    });
-
-    const unsubAdmins = onSnapshot(collection(db, 'admins'), (snapshot) => {
-      const adminsData: AdminUser[] = [];
-      snapshot.forEach((doc) => {
-        adminsData.push(doc.data() as AdminUser);
-      });
-      setAdminUsers(adminsData);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'admins');
-      if (error.message?.includes('permission')) {
-        setError('Acesso negado ao Firebase: Leia as instruções do assistente para alterar as Regras de Segurança do Firestore.');
-      }
-    });
-
-    const unsubMeals = onSnapshot(collection(db, 'meals'), (snapshot) => {
-      const mealsData: MealOption[] = [];
-      snapshot.forEach((doc) => {
-        const m = doc.data() as any;
-        mealsData.push({
-          ...m,
-          category: (m.category === 'Padrao' ? 'Gremio' : m.category === 'Vegetariana' ? 'Alimentação' : m.category === 'Especial' ? 'Outros' : m.category) || 'Outros'
+        const schoolsData: School[] = [];
+        schoolsSnap.forEach((doc) => {
+          schoolsData.push(doc.data() as School);
         });
-      });
-      if (mealsData.length > 0) {
-        setMealOptions(mealsData);
-      } else {
-        setMealOptions([]);
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'meals');
-      if (error.message?.includes('permission')) {
-        setError('Acesso negado ao Firebase: Leia as instruções do assistente para alterar as Regras de Segurança do Firestore.');
-      }
-    });
+        setSchools(schoolsData);
 
-    const unsubSelections = onSnapshot(collection(db, 'selections'), (snapshot) => {
-      const selectionsData: Selection[] = [];
-      snapshot.forEach((doc) => {
-        const s = doc.data() as any;
-        selectionsData.push({
-          ...s,
-          category: s.category || 'Gremio',
-          turno: s.turno || 'Integral',
-          sala: s.sala || '1º Ano',
-          turma: s.turma || 'A'
+        const adminsData: AdminUser[] = [];
+        adminsSnap.forEach((doc) => {
+          adminsData.push(doc.data() as AdminUser);
         });
-      });
-      setSelections(selectionsData);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'selections');
-      if (error.message?.includes('permission')) {
-        setError('Acesso negado ao Firebase: Leia as instruções do assistente para alterar as Regras de Segurança do Firestore.');
-      }
-    });
+        setAdminUsers(adminsData);
 
-    return () => {
-      unsubSchools();
-      unsubStudents();
-      unsubAdmins();
-      unsubMeals();
-      unsubSelections();
+        const mealsData: MealOption[] = [];
+        mealsSnap.forEach((doc) => {
+          const m = doc.data() as any;
+          mealsData.push({
+            ...m,
+            category: (m.category === 'Padrao' ? 'Gremio' : m.category === 'Vegetariana' ? 'Alimentação' : m.category === 'Especial' ? 'Outros' : m.category) || 'Outros'
+          });
+        });
+        if (mealsData.length > 0) {
+          setMealOptions(mealsData);
+        } else {
+          setMealOptions([]);
+        }
+
+        const selectionsData: Selection[] = [];
+        selectionsSnap.forEach((doc) => {
+          const s = doc.data() as any;
+          selectionsData.push({
+            ...s,
+            category: s.category || 'Gremio',
+            turno: s.turno || 'Integral',
+            sala: s.sala || '1º Ano',
+            turma: s.turma || 'A'
+          });
+        });
+        setSelections(selectionsData);
+      } catch (error: any) {
+        handleFirestoreError(error, OperationType.LIST, 'initial_fetch');
+        if (error.message?.includes('permission')) {
+          setError('Acesso negado ao Firebase: Leia as instruções do assistente para alterar as Regras de Segurança do Firestore.');
+        }
+      }
     };
+
+    fetchInitialData();
   }, []);
 
   const handleLoginSubmit = (e: React.FormEvent) => {
@@ -200,6 +179,7 @@ const App: React.FC = () => {
     try {
       const mealToSave = { ...meal, schoolId: currentSchoolId || meal.schoolId || '' };
       await setDoc(doc(db, 'meals', meal.id), mealToSave);
+      setMealOptions(prev => [...prev, mealToSave]);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `meals/${meal.id}`);
     }
@@ -209,6 +189,7 @@ const App: React.FC = () => {
     try {
       const mealToSave = { ...meal, schoolId: currentSchoolId || meal.schoolId || '' };
       await setDoc(doc(db, 'meals', meal.id), mealToSave);
+      setMealOptions(prev => prev.map(m => m.id === meal.id ? mealToSave : m));
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `meals/${meal.id}`);
     }
@@ -217,6 +198,7 @@ const App: React.FC = () => {
   const handleDeleteMeal = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'meals', id));
+      setMealOptions(prev => prev.filter(m => m.id !== id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `meals/${id}`);
     }
@@ -226,6 +208,7 @@ const App: React.FC = () => {
     try {
       const studentToSave = { ...student, schoolId: currentSchoolId || student.schoolId || '' };
       await setDoc(doc(db, 'students', student.matricula), studentToSave);
+      setRegisteredStudents(prev => [...prev, studentToSave]);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `students/${student.matricula}`);
     }
@@ -235,6 +218,7 @@ const App: React.FC = () => {
     try {
       const studentToSave = { ...student, schoolId: currentSchoolId || student.schoolId || '' };
       await setDoc(doc(db, 'students', student.matricula), studentToSave);
+      setRegisteredStudents(prev => prev.map(s => s.matricula === student.matricula ? studentToSave : s));
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `students/${student.matricula}`);
     }
@@ -243,6 +227,7 @@ const App: React.FC = () => {
   const handleDeleteStudent = async (matricula: string) => {
     try {
       await deleteDoc(doc(db, 'students', matricula));
+      setRegisteredStudents(prev => prev.filter(s => s.matricula !== matricula));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `students/${matricula}`);
     }
@@ -251,6 +236,7 @@ const App: React.FC = () => {
   const handleAddSchool = async (school: School) => {
     try {
       await setDoc(doc(db, 'schools', school.id), school);
+      setSchools(prev => [...prev, school]);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `schools/${school.id}`);
     }
@@ -259,6 +245,7 @@ const App: React.FC = () => {
   const handleDeleteSchool = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'schools', id));
+      setSchools(prev => prev.filter(s => s.id !== id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `schools/${id}`);
     }
@@ -267,14 +254,25 @@ const App: React.FC = () => {
   const handleAddAdmin = async (admin: AdminUser) => {
     try {
       await setDoc(doc(db, 'admins', admin.id), admin);
+      setAdminUsers(prev => [...prev, admin]);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `admins/${admin.id}`);
+    }
+  };
+
+  const handleUpdateAdmin = async (admin: AdminUser) => {
+    try {
+      await setDoc(doc(db, 'admins', admin.id), admin);
+      setAdminUsers(prev => prev.map(a => a.id === admin.id ? admin : a));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `admins/${admin.id}`);
     }
   };
 
   const handleDeleteAdmin = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'admins', id));
+      setAdminUsers(prev => prev.filter(a => a.id !== id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `admins/${id}`);
     }
@@ -304,6 +302,7 @@ const App: React.FC = () => {
 
     try {
       await setDoc(doc(db, 'selections', `${newSelection.matricula}_${selectedCategory}_${newSelection.timestamp.replace(/[:.]/g, '-')}`), newSelection);
+      setSelections(prev => [...prev, newSelection]);
       setSelectedMealId(null);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'selections');
@@ -546,6 +545,7 @@ const App: React.FC = () => {
             onAddSchool={handleAddSchool}
             onDeleteSchool={handleDeleteSchool}
             onAddAdmin={handleAddAdmin}
+            onUpdateAdmin={handleUpdateAdmin}
             onDeleteAdmin={handleDeleteAdmin}
           />
         ) : userRole === 'admin' ? (

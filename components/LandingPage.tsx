@@ -1,12 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, PieChart, Pie, Tooltip } from 'recharts';
 
 interface LandingPageProps {
   onEnterApp: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
-  // Mock Data for the Dashboard Preview
+const MockDashboard = () => {
   const mockBarData = [
     { name: 'Estrogonofe', count: 420 },
     { name: 'Macarronada', count: 350 },
@@ -22,6 +21,78 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
   const pieColors = ['#0EA5E9', '#F43F5E', '#6366F1'];
 
   return (
+    <div className="relative bg-slate-900 border border-slate-700 p-6 rounded-3xl shadow-2xl space-y-6 w-full h-full flex flex-col justify-center">
+      <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+        <div>
+          <h3 className="text-white font-bold flex items-center gap-2">
+            <i className="fas fa-chart-line text-amber-400"></i> Painel de Desempenho
+          </h3>
+          <p className="text-slate-400 text-xs mt-1">Dados atualizados em tempo real</p>
+        </div>
+        <div className="px-3 py-1 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold rounded-md uppercase tracking-wider">
+          Live
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
+        {/* Bar Chart Mock */}
+        <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
+          <h4 className="text-xs text-slate-300 font-bold uppercase tracking-wider mb-4">Preferência Alimentar</h4>
+          <div className="h-32 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={mockBarData} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                <XAxis type="number" hide />
+                <YAxis dataKey="name" type="category" fontSize={10} tick={{ fill: '#94a3b8' }} width={80} axisLine={false} tickLine={false} />
+                <Bar dataKey="count" fill="#4F46E5" radius={[0, 4, 4, 0]} barSize={12} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        {/* Pie Chart Mock */}
+        <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
+          <h4 className="text-xs text-slate-300 font-bold uppercase tracking-wider mb-4">Participação por Série</h4>
+          <div className="h-32 w-full flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={mockPieData} cx="50%" cy="50%" innerRadius={35} outerRadius={50} paddingAngle={5} dataKey="value">
+                  {mockPieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="flex justify-between mt-2">
+            {mockPieData.map((d, i) => (
+              <div key={d.name} className="text-center">
+                <p className="text-[9px] text-slate-400 uppercase">{d.name}</p>
+                <p className="text-xs font-bold text-white" style={{ color: pieColors[i] }}>{d.value}%</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
+  const carouselItems = [
+    { type: 'image', src: '/print1.png' },
+    { type: 'image', src: '/print2.png' },
+    { type: 'image', src: '/print3.png' },
+    { type: 'component', component: <MockDashboard /> }
+  ];
+  
+  const [currentImageIdx, setCurrentImageIdx] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentImageIdx((prev) => (prev + 1) % carouselItems.length);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
     <div className="animate-fadeIn">
       {/* Hero Section */}
       <section className="bg-gradient-to-br from-indigo-900 via-indigo-800 to-indigo-900 text-white py-20 px-6 rounded-b-[3rem] shadow-xl relative overflow-hidden">
@@ -33,11 +104,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
               <span>Revolução na Gestão Escolar</span>
             </div>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-black leading-tight">
-              A Voz do Aluno, <br />
-              <span className="text-amber-400">Dados para a Gestão.</span>
+              EduVotação - <br />
+              <span className="text-amber-400">Transparência, Inteligência e Participação.</span>
             </h1>
             <p className="text-lg text-indigo-100/90 leading-relaxed max-w-xl">
-              EduVotação é o sistema definitivo para escolas modernas. Garanta lisura nas eleições de representantes, minere dados para o cardápio da merenda e acompanhe o engajamento estudantil em tempo real.
+              A plataforma completa que garante eleições íntegras, otimiza a gestão da merenda escolar e transforma o engajamento estudantil em resultados.
             </p>
             <div className="pt-4">
               <button 
@@ -70,62 +141,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
             <div className="relative">
               <div className="absolute -inset-1 bg-gradient-to-r from-amber-400 to-emerald-400 rounded-3xl blur opacity-30 animate-pulse"></div>
               {/* Dashboard Mock UI */}
-              <div className="relative bg-slate-900 border border-slate-700 p-6 rounded-3xl shadow-2xl space-y-6">
-                
-                {/* Header Mock */}
-                <div className="flex justify-between items-center border-b border-slate-800 pb-4">
-                  <div>
-                    <h3 className="text-white font-bold flex items-center gap-2">
-                      <i className="fas fa-chart-line text-amber-400"></i> Painel de Desempenho
-                    </h3>
-                    <p className="text-slate-400 text-xs mt-1">Dados atualizados em tempo real</p>
-                  </div>
-                  <div className="px-3 py-1 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold rounded-md uppercase tracking-wider">
-                    Live
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Bar Chart Mock */}
-                  <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
-                    <h4 className="text-xs text-slate-300 font-bold uppercase tracking-wider mb-4">Preferência Alimentar</h4>
-                    <div className="h-32 w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={mockBarData} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                          <XAxis type="number" hide />
-                          <YAxis dataKey="name" type="category" fontSize={10} tick={{ fill: '#94a3b8' }} width={80} axisLine={false} tickLine={false} />
-                          <Bar dataKey="count" fill="#4F46E5" radius={[0, 4, 4, 0]} barSize={12} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                  
-                  {/* Pie Chart Mock */}
-                  <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
-                    <h4 className="text-xs text-slate-300 font-bold uppercase tracking-wider mb-4">Participação por Série</h4>
-                    <div className="h-32 w-full flex items-center justify-center">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={mockPieData} cx="50%" cy="50%" innerRadius={35} outerRadius={50} paddingAngle={5} dataKey="value">
-                            {mockPieData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
-                            ))}
-                          </Pie>
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div className="flex justify-between mt-2">
-                      {mockPieData.map((d, i) => (
-                        <div key={d.name} className="text-center">
-                          <p className="text-[9px] text-slate-400 uppercase">{d.name}</p>
-                          <p className="text-xs font-bold text-white" style={{ color: pieColors[i] }}>{d.value}%</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-              </div>
+              <MockDashboard />
             </div>
           </div>
         </div>
@@ -135,9 +151,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
       <section className="bg-white py-16 border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-12 items-center">
           <div className="space-y-6">
-            <h2 className="text-3xl font-black text-slate-800">Transforme Votos em Dados Estratégicos</h2>
+            <h2 className="text-3xl font-black text-slate-800">Garanta uma gestão escolar mais democrática, eficiente e transparente com o EduVotação.</h2>
             <p className="text-slate-500 text-lg leading-relaxed">
-              Com o EduVotação, a direção da escola e os gestores não recebem apenas o vencedor de uma eleição. Você tem acesso a um dashboard completo de Business Intelligence (BI) para mineração de dados educacionais.
+              Desenvolvido para as necessidades da escola contemporânea, nosso sistema assegura total lisura nos processos de escolha de líderes estudantis, fornece inteligência de dados para o planejamento nutricional da merenda e disponibiliza o monitoramento do engajamento dos alunos em tempo real.
             </p>
             <ul className="space-y-4">
               <li className="flex items-start gap-3">
@@ -189,49 +205,87 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
           <p className="text-slate-500 text-lg">Um sistema projetado para trazer inteligência, agilidade e transparência para a comunidade escolar.</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {/* Benefit 1 */}
-          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
-            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">
-              <i className="fas fa-utensils"></i>
+        <div className="flex flex-col lg:flex-row items-center gap-16">
+          {/* Image Side */}
+          <div className="lg:w-1/2 w-full">
+            <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-slate-100 bg-slate-50 p-2 aspect-[4/3] flex items-center justify-center">
+               {carouselItems.map((item, idx) => (
+                 <div
+                   key={idx}
+                   className={`absolute inset-0 w-full h-full transition-opacity duration-1000 p-2 ${
+                     idx === currentImageIdx ? 'opacity-100 z-10' : 'opacity-0 z-0'
+                   }`}
+                 >
+                   {item.type === 'image' ? (
+                     <img 
+                       src={item.src} 
+                       alt={`EduVotação Funcionalidades ${idx + 1}`} 
+                       className="w-full h-full object-cover rounded-2xl shadow-sm border border-slate-200" 
+                     />
+                   ) : (
+                     <div className="w-full h-full rounded-2xl overflow-hidden shadow-sm border border-slate-200">
+                       {item.component}
+                     </div>
+                   )}
+                 </div>
+               ))}
+               <div className="absolute inset-0 ring-1 ring-inset ring-black/10 rounded-3xl z-20 pointer-events-none"></div>
+               
+               {/* Carousel indicators */}
+               <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2 z-30">
+                 {carouselItems.map((_, idx) => (
+                   <button
+                     key={idx}
+                     onClick={() => setCurrentImageIdx(idx)}
+                     className={`w-2.5 h-2.5 rounded-full transition-all ${
+                       idx === currentImageIdx ? 'bg-indigo-600 scale-125' : 'bg-indigo-200 hover:bg-indigo-400'
+                     }`}
+                   />
+                 ))}
+               </div>
             </div>
-            <h3 className="text-xl font-bold text-slate-800 mb-3">Escolha das Refeições</h3>
-            <p className="text-slate-500 text-sm leading-relaxed">
-              Minere dados estatísticos sobre a preferência alimentar dos alunos. Reduza o desperdício e garanta um melhor aproveitamento na compra e distribuição da merenda escolar.
-            </p>
           </div>
 
-          {/* Benefit 2 */}
-          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
-            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">
-              <i className="fas fa-balance-scale"></i>
+          {/* Features Side */}
+          <div className="lg:w-1/2 w-full space-y-10">
+            {/* Benefit 1 */}
+            <div className="flex gap-6 group">
+              <div className="flex-shrink-0 w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                <i className="fas fa-utensils"></i>
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-800 mb-2">Gestão Inteligente da Merenda</h3>
+                <p className="text-slate-500 text-sm leading-relaxed">
+                  Minere dados estatísticos sobre a preferência alimentar dos alunos em tempo real. Identifique as refeições favoritas, reduza o desperdício drásticamente e garanta um melhor aproveitamento financeiro na compra e distribuição dos alimentos.
+                </p>
+              </div>
             </div>
-            <h3 className="text-xl font-bold text-slate-800 mb-3">Lisura nas Eleições</h3>
-            <p className="text-slate-500 text-sm leading-relaxed">
-              Garante total transparência e segurança criptográfica na escolha de Grêmio e Representantes de Classe, promovendo a cidadania e eliminando fraudes no processo.
-            </p>
-          </div>
 
-          {/* Benefit 3 */}
-          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
-            <div className="w-16 h-16 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">
-              <i className="fas fa-bolt"></i>
+            {/* Benefit 2 */}
+            <div className="flex gap-6 group">
+              <div className="flex-shrink-0 w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                <i className="fas fa-balance-scale"></i>
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-800 mb-2">Lisura Absoluta nas Eleições</h3>
+                <p className="text-slate-500 text-sm leading-relaxed">
+                  Garante total transparência e segurança na escolha de representantes do Grêmio e Líderes de Classe. Um ambiente auditável que promove o senso de cidadania e zera as chances de erros ou fraudes no processo democrático escolar.
+                </p>
+              </div>
             </div>
-            <h3 className="text-xl font-bold text-slate-800 mb-3">Agilidade e Facilidade</h3>
-            <p className="text-slate-500 text-sm leading-relaxed">
-              Diga adeus às cédulas de papel. O sistema é ágil e extremamente fácil de usar, permitindo que as votações sejam concluídas rapidamente por qualquer aluno ou professor.
-            </p>
-          </div>
 
-          {/* Benefit 4 */}
-          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
-            <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center text-2xl mb-6 group-hover:scale-110 transition-transform">
-              <i className="fas fa-chart-pie"></i>
+            {/* Benefit 3 */}
+            <div className="flex gap-6 group">
+              <div className="flex-shrink-0 w-16 h-16 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                <i className="fas fa-chart-pie"></i>
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-800 mb-2">Monitoramento de Engajamento</h3>
+                <p className="text-slate-500 text-sm leading-relaxed">
+                  Acompanhe a participação estudantil através de gráficos interativos. Descubra quais turmas e séries são mais participativas, permitindo que a coordenação atue de forma direcionada para estimular o envolvimento dos alunos.
+                </p>
+              </div>
             </div>
-            <h3 className="text-xl font-bold text-slate-800 mb-3">Métricas de Engajamento</h3>
-            <p className="text-slate-500 text-sm leading-relaxed">
-              Vá além da simples contagem de votos. Mensure a participação e acompanhe a frequência de engajamento dos alunos segmentada por série (ano) e por turma em tempo real.
-            </p>
           </div>
         </div>
       </section>

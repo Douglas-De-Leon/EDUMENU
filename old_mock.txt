@@ -1,0 +1,56 @@
+              <div className="relative bg-slate-900 border border-slate-700 p-6 rounded-3xl shadow-2xl space-y-6">
+                
+                {/* Header Mock */}
+                <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+                  <div>
+                    <h3 className="text-white font-bold flex items-center gap-2">
+                      <i className="fas fa-chart-line text-amber-400"></i> Painel de Desempenho
+                    </h3>
+                    <p className="text-slate-400 text-xs mt-1">Dados atualizados em tempo real</p>
+                  </div>
+                  <div className="px-3 py-1 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold rounded-md uppercase tracking-wider">
+                    Live
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Bar Chart Mock */}
+                  <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
+                    <h4 className="text-xs text-slate-300 font-bold uppercase tracking-wider mb-4">Preferência Alimentar</h4>
+                    <div className="h-32 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={mockBarData} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                          <XAxis type="number" hide />
+                          <YAxis dataKey="name" type="category" fontSize={10} tick={{ fill: '#94a3b8' }} width={80} axisLine={false} tickLine={false} />
+                          <Bar dataKey="count" fill="#4F46E5" radius={[0, 4, 4, 0]} barSize={12} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                  
+                  {/* Pie Chart Mock */}
+                  <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700/50">
+                    <h4 className="text-xs text-slate-300 font-bold uppercase tracking-wider mb-4">Participação por Série</h4>
+                    <div className="h-32 w-full flex items-center justify-center">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={mockPieData} cx="50%" cy="50%" innerRadius={35} outerRadius={50} paddingAngle={5} dataKey="value">
+                            {mockPieData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex justify-between mt-2">
+                      {mockPieData.map((d, i) => (
+                        <div key={d.name} className="text-center">
+                          <p className="text-[9px] text-slate-400 uppercase">{d.name}</p>
+                          <p className="text-xs font-bold text-white" style={{ color: pieColors[i] }}>{d.value}%</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+              </div>
