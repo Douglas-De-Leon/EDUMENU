@@ -76,22 +76,6 @@ const MockDashboard = () => {
 };
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
-  const carouselItems = [
-    { type: 'image', src: '/print1.png' },
-    { type: 'image', src: '/print2.png' },
-    { type: 'image', src: '/print3.png' },
-    { type: 'component', component: <MockDashboard /> }
-  ];
-  
-  const [currentImageIdx, setCurrentImageIdx] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentImageIdx((prev) => (prev + 1) % carouselItems.length);
-    }, 4000);
-    return () => clearInterval(timer);
-  }, []);
-
   return (
     <div className="animate-fadeIn">
       {/* Hero Section */}
@@ -205,86 +189,43 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
           <p className="text-slate-500 text-lg">Um sistema projetado para trazer inteligência, agilidade e transparência para a comunidade escolar.</p>
         </div>
 
-        <div className="flex flex-col lg:flex-row items-center gap-16">
-          {/* Image Side */}
-          <div className="lg:w-1/2 w-full">
-            <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-slate-100 bg-slate-50 p-2 aspect-[4/3] flex items-center justify-center">
-               {carouselItems.map((item, idx) => (
-                 <div
-                   key={idx}
-                   className={`absolute inset-0 w-full h-full transition-opacity duration-1000 p-2 ${
-                     idx === currentImageIdx ? 'opacity-100 z-10' : 'opacity-0 z-0'
-                   }`}
-                 >
-                   {item.type === 'image' ? (
-                     <img 
-                       src={item.src} 
-                       alt={`EduVotação Funcionalidades ${idx + 1}`} 
-                       className="w-full h-full object-cover rounded-2xl shadow-sm border border-slate-200" 
-                     />
-                   ) : (
-                     <div className="w-full h-full rounded-2xl overflow-hidden shadow-sm border border-slate-200">
-                       {item.component}
-                     </div>
-                   )}
-                 </div>
-               ))}
-               <div className="absolute inset-0 ring-1 ring-inset ring-black/10 rounded-3xl z-20 pointer-events-none"></div>
-               
-               {/* Carousel indicators */}
-               <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-2 z-30">
-                 {carouselItems.map((_, idx) => (
-                   <button
-                     key={idx}
-                     onClick={() => setCurrentImageIdx(idx)}
-                     className={`w-2.5 h-2.5 rounded-full transition-all ${
-                       idx === currentImageIdx ? 'bg-indigo-600 scale-125' : 'bg-indigo-200 hover:bg-indigo-400'
-                     }`}
-                   />
-                 ))}
-               </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+          {/* Benefit 1 */}
+          <div className="flex flex-col gap-6 group items-center text-center">
+            <div className="flex-shrink-0 w-20 h-20 bg-emerald-50 text-emerald-600 rounded-[2rem] flex items-center justify-center text-3xl group-hover:scale-110 group-hover:-rotate-3 transition-all">
+              <i className="fas fa-utensils"></i>
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-800 mb-3">Gestão Inteligente da Merenda</h3>
+              <p className="text-slate-500 text-base leading-relaxed">
+                Minere dados estatísticos sobre a preferência alimentar dos alunos em tempo real. Identifique as refeições favoritas, reduza o desperdício drásticamente e garanta um melhor aproveitamento financeiro na compra e distribuição dos alimentos.
+              </p>
             </div>
           </div>
 
-          {/* Features Side */}
-          <div className="lg:w-1/2 w-full space-y-10">
-            {/* Benefit 1 */}
-            <div className="flex gap-6 group">
-              <div className="flex-shrink-0 w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
-                <i className="fas fa-utensils"></i>
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-slate-800 mb-2">Gestão Inteligente da Merenda</h3>
-                <p className="text-slate-500 text-sm leading-relaxed">
-                  Minere dados estatísticos sobre a preferência alimentar dos alunos em tempo real. Identifique as refeições favoritas, reduza o desperdício drásticamente e garanta um melhor aproveitamento financeiro na compra e distribuição dos alimentos.
-                </p>
-              </div>
+          {/* Benefit 2 */}
+          <div className="flex flex-col gap-6 group items-center text-center">
+            <div className="flex-shrink-0 w-20 h-20 bg-blue-50 text-blue-600 rounded-[2rem] flex items-center justify-center text-3xl group-hover:scale-110 group-hover:-rotate-3 transition-all">
+              <i className="fas fa-balance-scale"></i>
             </div>
-
-            {/* Benefit 2 */}
-            <div className="flex gap-6 group">
-              <div className="flex-shrink-0 w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
-                <i className="fas fa-balance-scale"></i>
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-slate-800 mb-2">Lisura Absoluta nas Eleições</h3>
-                <p className="text-slate-500 text-sm leading-relaxed">
-                  Garante total transparência e segurança na escolha de representantes do Grêmio e Líderes de Classe. Um ambiente auditável que promove o senso de cidadania e zera as chances de erros ou fraudes no processo democrático escolar.
-                </p>
-              </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-800 mb-3">Lisura Absoluta nas Eleições</h3>
+              <p className="text-slate-500 text-base leading-relaxed">
+                Garante total transparência e segurança na escolha de representantes do Grêmio e Líderes de Classe. Um ambiente auditável que promove o senso de cidadania e zera as chances de erros ou fraudes no processo democrático escolar.
+              </p>
             </div>
+          </div>
 
-            {/* Benefit 3 */}
-            <div className="flex gap-6 group">
-              <div className="flex-shrink-0 w-16 h-16 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
-                <i className="fas fa-chart-pie"></i>
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-slate-800 mb-2">Monitoramento de Engajamento</h3>
-                <p className="text-slate-500 text-sm leading-relaxed">
-                  Acompanhe a participação estudantil através de gráficos interativos. Descubra quais turmas e séries são mais participativas, permitindo que a coordenação atue de forma direcionada para estimular o envolvimento dos alunos.
-                </p>
-              </div>
+          {/* Benefit 3 */}
+          <div className="flex flex-col gap-6 group items-center text-center">
+            <div className="flex-shrink-0 w-20 h-20 bg-purple-50 text-purple-600 rounded-[2rem] flex items-center justify-center text-3xl group-hover:scale-110 group-hover:-rotate-3 transition-all">
+              <i className="fas fa-chart-pie"></i>
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-800 mb-3">Monitoramento de Engajamento</h3>
+              <p className="text-slate-500 text-base leading-relaxed">
+                Acompanhe a participação estudantil através de gráficos interativos. Descubra quais turmas e séries são mais participativas, permitindo que a coordenação atue de forma direcionada para estimular o envolvimento dos alunos.
+              </p>
             </div>
           </div>
         </div>
