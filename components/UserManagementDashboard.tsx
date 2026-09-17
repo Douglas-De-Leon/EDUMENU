@@ -79,7 +79,7 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
     <div className="space-y-10 animate-fadeIn">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Form Section */}
-        <section ref={formRef} className="lg:col-span-1 bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6 h-fit sticky top-4">
+        <section ref={formRef} className="lg:col-span-1 bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6 h-fit lg:sticky lg:top-4">
           <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
             <i className={`fas ${editingStudent ? 'fa-edit text-amber-500' : 'fa-user-plus text-indigo-500'}`}></i>
             {editingStudent ? 'Editar Aluno' : 'Cadastrar Novo Aluno'}
