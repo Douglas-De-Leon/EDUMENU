@@ -41,9 +41,9 @@ export const StudentAttendanceManagement: React.FC<StudentAttendanceManagementPr
     if (existing) {
       setPresentMatriculas(existing.presentMatriculas || []);
     } else {
-      // By default when no attendance recorded yet, we can initialize with all students present or empty
-      // Setting all present by default allows admin to quickly uncheck the absent ones!
-      setPresentMatriculas(students.map(s => s.matricula));
+      // REGRA: Por padrão, todos os alunos iniciam como FALTOSOS (desmarcados / bloqueados).
+      // Apenas após a realização da frequência e confirmação da presença é que são habilitados!
+      setPresentMatriculas([]);
     }
   }, [selectedDate, attendanceRecords, students]);
 
@@ -146,7 +146,7 @@ export const StudentAttendanceManagement: React.FC<StudentAttendanceManagementPr
               Frequência de Alunos & Habilitação de Voto
             </h2>
             <p className="text-xs sm:text-sm text-emerald-100/90 font-medium max-w-2xl">
-              Defina quais discentes estão presentes no dia da eleição. <strong>Alunos não selecionados são classificados como faltosos</strong> e terão o acesso às urnas eletrônicas bloqueado nesta data.
+              <strong>Por padrão, todos os discentes cadastrados iniciam como faltosos (bloqueados)</strong>. Marque a caixa de seleção dos alunos presentes em sala e clique em <em>"Salvar Frequência e Habilitar Alunos"</em> para liberar a urna eletrônica.
             </p>
           </div>
 
@@ -251,7 +251,7 @@ export const StudentAttendanceManagement: React.FC<StudentAttendanceManagementPr
         <div className="bg-amber-50/80 border border-amber-200 p-4 rounded-2xl flex items-center gap-3 text-xs text-amber-900 font-bold">
           <i className="fas fa-exclamation-circle text-amber-600 text-base"></i>
           <span>
-            Ainda não foi gravada uma frequência definitiva para {formattedDate}. Faça as marcações abaixo e clique em <strong>"Salvar Frequência e Habilitar Alunos"</strong>.
+            Nenhuma chamada gravada para {formattedDate}. <strong>Por padrão, todos os {totalStudents} alunos estão cadastrados como faltosos (bloqueados)</strong>. Marque as caixas de seleção dos presentes e confirme em <strong>"Salvar Frequência e Habilitar Alunos"</strong> para liberar o voto.
           </span>
         </div>
       )}
@@ -441,7 +441,7 @@ export const StudentAttendanceManagement: React.FC<StudentAttendanceManagementPr
 
                         {/* Detalhes do Aluno */}
                         <div className="overflow-hidden">
-                          <span className={`text-sm font-black block truncate ${isPresent ? 'text-slate-900' : 'text-slate-600 line-through'}`}>
+                          <span className={`text-sm font-black block truncate ${isPresent ? 'text-slate-900' : 'text-slate-600'}`}>
                             {student.name}
                           </span>
                           <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 font-medium">

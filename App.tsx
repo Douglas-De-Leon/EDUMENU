@@ -620,10 +620,17 @@ const App: React.FC = () => {
     if (!currentStudent || !optionId) return;
 
     // Checagem de Frequência Escolar do Aluno para a data da eleição
+    // Regra: Por padrão, todo aluno inicia como faltoso (bloqueado).
+    // O voto só é habilitado após a chamada escolar ser realizada e sua presença confirmada.
     const sessionDate = session.date || new Date().toISOString().split('T')[0];
     const attRecord = attendanceRecords.find(a => a.date === sessionDate);
-    if (attRecord && !attRecord.presentMatriculas.includes(currentStudent.matricula)) {
-      setError(`Voto bloqueado: Você consta como faltoso na chamada escolar de ${sessionDate.split('-').reverse().join('/')}. Apenas alunos presentes podem votar.`);
+    if (!attRecord) {
+      setError(`Voto bloqueado: Por padrão, todos os discentes iniciam como faltosos. A frequência escolar de ${sessionDate.split('-').reverse().join('/')} ainda não foi confirmada pela coordenação.`);
+      return;
+    }
+
+    if (!attRecord.presentMatriculas.includes(currentStudent.matricula)) {
+      setError(`Voto bloqueado: Você consta como faltoso na chamada escolar de ${sessionDate.split('-').reverse().join('/')}. Apenas alunos com presença confirmada em aula podem votar.`);
       return;
     }
 

@@ -79,28 +79,52 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
     );
   };
 
+  const todayDateStr = useMemo(() => {
+    return new Date().toISOString().split('T')[0];
+  }, []);
+
+  const todayAttendance = useMemo(() => {
+    return attendanceRecords.find(a => a.date === todayDateStr);
+  }, [attendanceRecords, todayDateStr]);
+
+  const isPresentToday = useMemo(() => {
+    if (!todayAttendance) return false; // REGRA: Por padrão, alunos iniciam como faltosos!
+    return todayAttendance.presentMatriculas.includes(currentStudent.matricula);
+  }, [todayAttendance, currentStudent.matricula]);
+
   // Attendance & voting eligibility check for a session
   const isStudentEligibleToVote = (session: VotingSession) => {
-    if (!attendanceRecords || attendanceRecords.length === 0) {
-      return { eligible: true };
+    const sessionDate = session.date || todayDateStr;
+    const formattedDate = sessionDate.split('-').reverse().join('/');
+    const attendance = attendanceRecords ? attendanceRecords.find(a => a.date === sessionDate) : null;
+
+    // REGRA: Por padrão, todos os discentes cadastrados iniciam como faltosos.
+    // Apenas após ser realizada a frequência e confirmada a presença é que o voto é habilitado!
+    if (!attendance) {
+      return {
+        eligible: false,
+        sessionDate,
+        status: 'awaiting_attendance',
+        reason: `Chamada escolar de ${formattedDate} ainda não confirmada. Por padrão, todos os alunos iniciam como faltosos até a coordenação realizar a frequência e confirmar sua presença em sala de aula.`
+      };
     }
 
-    const sessionDate = session.date || new Date().toISOString().split('T')[0];
-    const attendance = attendanceRecords.find(a => a.date === sessionDate);
-
-    // If an attendance record was submitted by the school for that session's date:
-    if (attendance) {
-      const isPresent = attendance.presentMatriculas.includes(currentStudent.matricula);
-      if (!isPresent) {
-        return {
-          eligible: false,
-          sessionDate,
-          reason: `Você foi registrado como faltoso na chamada de ${sessionDate.split('-').reverse().join('/')}. Apenas alunos com presença confirmada em aula podem votar nesta eleição.`
-        };
-      }
+    const isPresent = attendance.presentMatriculas.includes(currentStudent.matricula);
+    if (!isPresent) {
+      return {
+        eligible: false,
+        sessionDate,
+        status: 'absent',
+        reason: `Você consta como faltoso na chamada de ${formattedDate}. Apenas alunos com presença confirmada em aula estão habilitados a votar nesta eleição.`
+      };
     }
 
-    return { eligible: true, sessionDate };
+    return { 
+      eligible: true, 
+      sessionDate, 
+      status: 'present',
+      reason: `Presença confirmada na chamada de ${formattedDate}. Você está habilitado para votar nesta eleição.`
+    };
   };
 
   // Compute metrics
@@ -237,10 +261,18 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
             {currentStudent.name.charAt(0)}
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-md border border-indigo-100">
-                Eleitor Habilitado
-              </span>
+            <div className="flex flex-wrap items-center gap-2">
+              {isPresentToday ? (
+                <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
+                  <i className="fas fa-check-circle text-emerald-600"></i>
+                  Presença Confirmada Hoje
+                </span>
+              ) : (
+                <span className="text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 px-2.5 py-0.5 rounded-md border border-rose-200 flex items-center gap-1">
+                  <i className="fas fa-user-slash text-rose-600"></i>
+                  Faltoso Hoje (Bloqueado)
+                </span>
+              )}
               <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-md border border-emerald-100 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span>
                 Urna Conectada
@@ -324,6 +356,49 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Banner Informativo de Status de Frequência do Estudante */}
+          {isPresentToday ? (
+            <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-sm shrink-0">
+                  <i className="fas fa-check"></i>
+                </div>
+                <div>
+                  <span className="text-[11px] font-black uppercase tracking-wider text-emerald-900 block">
+                    Presença Escolar Confirmada
+                  </span>
+                  <p className="text-emerald-800 text-xs font-semibold mt-0.5">
+                    Sua presença em aula foi confirmada pela coordenação. Suas cédulas de votação estão liberadas para participação.
+                  </p>
+                </div>
+              </div>
+              <span className="text-[11px] font-extrabold bg-emerald-200 text-emerald-900 px-3 py-1 rounded-full shrink-0 self-start sm:self-auto flex items-center gap-1.5">
+                <i className="fas fa-check-circle text-emerald-700"></i>
+                Apto a Votar
+              </span>
+            </div>
+          ) : (
+            <div className="bg-amber-50/90 border border-amber-200 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center text-sm shrink-0">
+                  <i className="fas fa-user-clock"></i>
+                </div>
+                <div>
+                  <span className="text-[11px] font-black uppercase tracking-wider text-amber-900 block">
+                    Presença Pendente de Confirmação
+                  </span>
+                  <p className="text-amber-800 text-xs font-semibold mt-0.5">
+                    Por padrão, os alunos constam como faltosos até a chamada do dia ser realizada pela coordenação da escola. Assim que sua presença for confirmada, suas cédulas serão liberadas.
+                  </p>
+                </div>
+              </div>
+              <span className="text-[11px] font-extrabold bg-amber-200 text-amber-900 px-3 py-1 rounded-full shrink-0 self-start sm:self-auto flex items-center gap-1.5">
+                <i className="fas fa-lock text-amber-700"></i>
+                Aguardando Chamada
+              </span>
+            </div>
+          )}
 
           {/* Filter and Search Bar */}
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
@@ -426,12 +501,13 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
                             </span>
                           ) : isAttendanceBlocked ? (
                             <span className="text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 px-2.5 py-0.5 rounded-full border border-rose-200 flex items-center gap-1">
-                              <i className="fas fa-user-times"></i>
-                              Faltoso (Bloqueado)
+                              <i className="fas fa-user-slash"></i>
+                              {attendanceCheck.status === 'awaiting_attendance' ? 'Aguardando Presença (Faltoso)' : 'Faltoso (Bloqueado)'}
                             </span>
                           ) : session.active ? (
-                            <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-full border border-indigo-200">
-                              Urna Aberta
+                            <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                              <i className="fas fa-check-circle"></i>
+                              Presença Confirmada
                             </span>
                           ) : (
                             <span className="text-[10px] font-black uppercase tracking-wider bg-slate-200 text-slate-600 px-2.5 py-0.5 rounded-full">
@@ -512,7 +588,7 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
                           className="w-full py-3.5 px-4 rounded-xl font-black text-xs bg-rose-100 text-rose-700 border border-rose-200 cursor-not-allowed flex items-center justify-center gap-2"
                         >
                           <i className="fas fa-ban"></i>
-                          Voto Bloqueado (Aluno Faltoso)
+                          {attendanceCheck.status === 'awaiting_attendance' ? 'Voto Bloqueado (Aguardando Chamada)' : 'Voto Bloqueado (Aluno Faltoso)'}
                         </button>
                       ) : session.active ? (
                         <button
