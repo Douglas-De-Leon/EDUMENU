@@ -3,27 +3,36 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, Legend, AreaChart, Area
 } from 'recharts';
-import { Selection, MealOption, Student } from '../types';
+import { Selection, MealOption, Student, VotingSession } from '../types';
+import { VotingManagement } from './VotingManagement';
 
 interface AdminDashboardProps {
   selections: Selection[];
   mealOptions: MealOption[];
+  votingSessions?: VotingSession[];
   onAddMeal: (meal: MealOption) => void;
   onUpdateMeal: (meal: MealOption) => void;
   onDeleteMeal: (id: string) => void;
+  onAddVotingSession?: (session: VotingSession) => void;
+  onUpdateVotingSession?: (session: VotingSession) => void;
+  onDeleteVotingSession?: (id: string) => void;
   students: Student[];
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
   selections, 
   mealOptions, 
+  votingSessions = [],
   onAddMeal,
   onUpdateMeal,
   onDeleteMeal,
+  onAddVotingSession,
+  onUpdateVotingSession,
+  onDeleteVotingSession,
   students 
 }) => {
-  // Tabs for managing options or viewing results
-  const [activeTab, setActiveTab] = useState<'analytics' | 'options'>('analytics');
+  // Tabs for managing votings, options or viewing results
+  const [activeTab, setActiveTab] = useState<'votings' | 'options' | 'analytics'>('votings');
   
   // Category filter for the results dashboard
   const [selectedCategory, setSelectedCategory] = useState<'Gremio' | 'Representante' | 'Alimentação' | 'Outros'>('Gremio');
@@ -344,17 +353,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Admin Tab Controller Bar */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50 p-2 rounded-2xl border border-slate-200/60 shadow-inner">
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <button 
-            onClick={() => setActiveTab('analytics')}
+            onClick={() => setActiveTab('votings')}
             className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
-              activeTab === 'analytics' 
+              activeTab === 'votings' 
                 ? 'bg-white shadow-sm text-indigo-700 font-black' 
                 : 'text-slate-600 hover:text-slate-800'
             }`}
           >
-            <i className="fas fa-chart-pie"></i>
-            Apuração Geral e Gráficos
+            <i className="fas fa-calendar-plus"></i>
+            Criar e Agendar Votação
+            {votingSessions.length > 0 && (
+              <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-bold">
+                {votingSessions.length}
+              </span>
+            )}
           </button>
           <button 
             onClick={() => setActiveTab('options')}
@@ -365,7 +379,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             }`}
           >
             <i className="fas fa-vote-yea"></i>
-            Gerenciar Candidatos / Opções
+            Cadastrar Opções / Candidatos
+          </button>
+          <button 
+            onClick={() => setActiveTab('analytics')}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+              activeTab === 'analytics' 
+                ? 'bg-white shadow-sm text-indigo-700 font-black' 
+                : 'text-slate-600 hover:text-slate-800'
+            }`}
+          >
+            <i className="fas fa-chart-pie"></i>
+            Apuração Geral e Gráficos
           </button>
         </div>
         <div className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 flex items-center gap-2">
@@ -814,11 +839,42 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       )}
 
+      {activeTab === 'votings' && (
+        <VotingManagement
+          mealOptions={mealOptions}
+          votingSessions={votingSessions}
+          onAddVotingSession={onAddVotingSession || (() => {})}
+          onUpdateVotingSession={onUpdateVotingSession || (() => {})}
+          onDeleteVotingSession={onDeleteVotingSession || (() => {})}
+          onNavigateToOptions={() => setActiveTab('options')}
+        />
+      )}
+
       {activeTab === 'options' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
+          {/* Quick link banner to Votings */}
+          <div className="lg:col-span-3 bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 border border-indigo-100 p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-lg shrink-0">
+                <i className="fas fa-calendar-check"></i>
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-800 text-sm">Pronto para criar ou agendar uma eleição?</h4>
+                <p className="text-xs text-slate-500">Acesse a área de Criar Votação para definir a data específica e selecionar os itens habilitados.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('votings')}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-all shrink-0 active:scale-95"
+            >
+              Criar / Agendar Votação →
+            </button>
+          </div>
+
           {/* Form to Register New Options */}
-          <section className="lg:col-span-1 bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6 h-fit sticky top-4">
+          <section className="lg:col-span-1 bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6 h-fit lg:sticky lg:top-4">
             <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
               <i className="fas fa-plus-circle text-indigo-500"></i>
               Criar Nova Opção de Voto

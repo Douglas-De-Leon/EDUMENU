@@ -6,11 +6,12 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { UserManagementDashboard } from './components/UserManagementDashboard';
 import { MasterDashboard } from './components/MasterDashboard';
 import { LandingPage } from './components/LandingPage';
-import { Student, Selection, MealOption, AdminUser, School } from './types';
-import { MEAL_OPTIONS, INITIAL_STUDENTS } from './constants';
+import { Student, Selection, MealOption, AdminUser, School, VotingSession } from './types';
+import { MEAL_OPTIONS, INITIAL_STUDENTS, INITIAL_VOTING_SESSIONS } from './constants';
 import { db } from './firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, getDoc, getDocs } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from './utils/firestoreErrorHandler';
+import { StudentVotingDashboard } from './components/StudentVotingDashboard';
 
 const App: React.FC = () => {
   const [userRole, setUserRole] = useState<'student' | 'admin' | 'master' | null>(() => {
@@ -35,6 +36,16 @@ const App: React.FC = () => {
   });
   const [selections, setSelections] = useState<Selection[]>([]);
   const [mealOptions, setMealOptions] = useState<MealOption[]>(MEAL_OPTIONS);
+  const [votingSessions, setVotingSessions] = useState<VotingSession[]>(() => {
+    const saved = localStorage.getItem('votingSessions');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return INITIAL_VOTING_SESSIONS;
+  });
   const [selectedCategory, setSelectedCategory] = useState<'Gremio' | 'Representante' | 'Alimentação' | 'Outros'>('Gremio');
   const [showSummary, setShowSummary] = useState(false);
   const [selectedMealId, setSelectedMealId] = useState<string | null>(null);
@@ -43,17 +54,23 @@ const App: React.FC = () => {
   const schoolMealOptions = mealOptions.filter(m => userRole === 'master' || (currentSchoolId && m.schoolId === currentSchoolId));
   const schoolSelections = selections.filter(s => userRole === 'master' || (currentSchoolId && s.schoolId === currentSchoolId));
   const schoolStudents = registeredStudents.filter(s => userRole === 'master' || (currentSchoolId && s.schoolId === currentSchoolId));
+  const schoolVotingSessions = votingSessions.filter(v => userRole === 'master' || (currentSchoolId && v.schoolId === currentSchoolId));
+
+  useEffect(() => {
+    localStorage.setItem('votingSessions', JSON.stringify(votingSessions));
+  }, [votingSessions]);
 
   // Persistence (Firestore)
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const [studentsSnap, schoolsSnap, adminsSnap, mealsSnap, selectionsSnap] = await Promise.all([
+        const [studentsSnap, schoolsSnap, adminsSnap, mealsSnap, selectionsSnap, sessionsSnap] = await Promise.all([
           getDocs(collection(db, 'students')),
           getDocs(collection(db, 'schools')),
           getDocs(collection(db, 'admins')),
           getDocs(collection(db, 'meals')),
-          getDocs(collection(db, 'selections'))
+          getDocs(collection(db, 'selections')),
+          getDocs(collection(db, 'voting_sessions'))
         ]);
 
         const studentsData: Student[] = [];
@@ -110,6 +127,17 @@ const App: React.FC = () => {
           });
         });
         setSelections(selectionsData);
+
+        const sessionsData: VotingSession[] = [];
+        sessionsSnap.forEach((doc) => {
+          const vs = doc.data() as VotingSession;
+          sessionsData.push(vs);
+        });
+        if (sessionsData.length > 0) {
+          setVotingSessions(sessionsData);
+        } else {
+          setVotingSessions(INITIAL_VOTING_SESSIONS);
+        }
       } catch (error: any) {
         handleFirestoreError(error, OperationType.LIST, 'initial_fetch');
         if (error.message?.includes('permission')) {
@@ -204,6 +232,38 @@ const App: React.FC = () => {
     }
   };
 
+  const handleAddVotingSession = async (session: VotingSession) => {
+    const sessionToSave = { ...session, schoolId: currentSchoolId || session.schoolId || '' };
+    try {
+      await setDoc(doc(db, 'voting_sessions', session.id), sessionToSave);
+      setVotingSessions(prev => [sessionToSave, ...prev]);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `voting_sessions/${session.id}`);
+      setVotingSessions(prev => [sessionToSave, ...prev]);
+    }
+  };
+
+  const handleUpdateVotingSession = async (session: VotingSession) => {
+    const sessionToSave = { ...session, schoolId: currentSchoolId || session.schoolId || '' };
+    try {
+      await setDoc(doc(db, 'voting_sessions', session.id), sessionToSave);
+      setVotingSessions(prev => prev.map(s => s.id === session.id ? sessionToSave : s));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `voting_sessions/${session.id}`);
+      setVotingSessions(prev => prev.map(s => s.id === session.id ? sessionToSave : s));
+    }
+  };
+
+  const handleDeleteVotingSession = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'voting_sessions', id));
+      setVotingSessions(prev => prev.filter(s => s.id !== id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `voting_sessions/${id}`);
+      setVotingSessions(prev => prev.filter(s => s.id !== id));
+    }
+  };
+
   const handleAddStudent = async (student: Student) => {
     try {
       const studentToSave = { ...student, schoolId: currentSchoolId || student.schoolId || '' };
@@ -278,6 +338,40 @@ const App: React.FC = () => {
     }
   };
 
+  const handleCastVoteInSession = async (session: VotingSession, optionId: string) => {
+    if (!currentStudent || !optionId) return;
+
+    const alreadyVoted = schoolSelections.some(
+      s => s.matricula === currentStudent.matricula && 
+           (s.votingSessionId === session.id || (!s.votingSessionId && s.category === session.category))
+    );
+    if (alreadyVoted) {
+      setError(`Você já registrou seu voto nesta eleição (${session.title}).`);
+      return;
+    }
+
+    const newSelection: Selection = {
+      matricula: currentStudent.matricula,
+      mealId: optionId,
+      category: session.category,
+      votingSessionId: session.id,
+      timestamp: new Date().toISOString(),
+      turno: currentStudent.turno || 'Integral',
+      sala: currentStudent.sala || '1º Ano',
+      turma: currentStudent.turma || 'A',
+      schoolId: currentSchoolId || currentStudent.schoolId || ''
+    };
+
+    try {
+      const docId = `${newSelection.matricula}_${session.id}_${newSelection.timestamp.replace(/[:.]/g, '-')}`;
+      await setDoc(doc(db, 'selections', docId), newSelection);
+      setSelections(prev => [...prev, newSelection]);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'selections');
+      setSelections(prev => [...prev, newSelection]);
+    }
+  };
+
   const confirmSelection = async () => {
     if (!currentStudent || !selectedMealId) return;
 
@@ -324,10 +418,30 @@ const App: React.FC = () => {
     localStorage.removeItem('currentSchoolId');
   };
 
+  // Active voting session for current category (matching today's date if scheduled, or active session)
+  const activeSessionForCategory = useMemo(() => {
+    const today = new Date();
+    const todayStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    
+    const todaySession = schoolVotingSessions.find(
+      s => s.category === selectedCategory && s.active && s.date === todayStr
+    );
+    if (todaySession) return todaySession;
+
+    return schoolVotingSessions.find(
+      s => s.category === selectedCategory && s.active
+    );
+  }, [schoolVotingSessions, selectedCategory]);
+
   // Only show active options belonging to the currently selected category
   const activeMeals = useMemo(() => {
+    if (activeSessionForCategory && activeSessionForCategory.optionIds && activeSessionForCategory.optionIds.length > 0) {
+      return schoolMealOptions.filter(
+        m => m.active && m.category === selectedCategory && activeSessionForCategory.optionIds.includes(m.id)
+      );
+    }
     return schoolMealOptions.filter(m => m.active && m.category === selectedCategory);
-  }, [schoolMealOptions, selectedCategory]);
+  }, [schoolMealOptions, selectedCategory, activeSessionForCategory]);
 
   const hasAlreadyVoted = useMemo(() => {
     return schoolSelections.some(
@@ -553,9 +667,13 @@ const App: React.FC = () => {
             <AdminDashboard 
               selections={schoolSelections} 
               mealOptions={schoolMealOptions} 
+              votingSessions={schoolVotingSessions}
               onAddMeal={handleAddMeal}
               onUpdateMeal={handleUpdateMeal}
               onDeleteMeal={handleDeleteMeal}
+              onAddVotingSession={handleAddVotingSession}
+              onUpdateVotingSession={handleUpdateVotingSession}
+              onDeleteVotingSession={handleDeleteVotingSession}
               students={schoolStudents}
             />
           ) : (
@@ -586,219 +704,14 @@ const App: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                {/* User Selection Section */}
-                <div className="lg:col-span-2 space-y-6">
-                  {/* Student profile info card */}
-                  <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold text-xl">
-                        {currentStudent.name.charAt(0)}
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-bold text-slate-800">{currentStudent.name}</h3>
-                        <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                          <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Matrícula: {currentStudent.matricula}</span>
-                          <span className="text-slate-300">•</span>
-                          <span className="text-xs bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-md">Série: {currentStudent.sala || 'N/A'}</span>
-                          <span className="text-slate-300">•</span>
-                          <span className="text-xs bg-slate-100 text-slate-600 font-bold px-2 py-0.5 rounded-md">Turma: {currentStudent.turma || 'N/A'}</span>
-                          <span className="text-slate-300">•</span>
-                          <span className="text-xs bg-indigo-50 text-indigo-600 font-bold px-2 py-0.5 rounded-md">Turno: {currentStudent.turno || 'Integral'}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <button onClick={logout} className="text-slate-400 hover:text-red-500 p-2 transition-colors flex flex-col items-center">
-                      <i className="fas fa-power-off text-lg"></i>
-                      <span className="text-[10px] uppercase font-bold mt-1">Sair</span>
-                    </button>
-                  </div>
-
-                  {/* Student Ballot Category Switcher */}
-                  <div className="space-y-2">
-                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Cédulas Disponíveis</h4>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {(['Gremio', 'Representante', 'Alimentação', 'Outros'] as const).map((cat) => {
-                        const votedInThisCat = schoolSelections.some(
-                          s => s.matricula === currentStudent.matricula && s.category === cat
-                        );
-                        const isSelected = selectedCategory === cat && !showSummary;
-                        
-                        return (
-                          <button
-                            key={cat}
-                            onClick={() => {
-                              setSelectedCategory(cat);
-                              setSelectedMealId(null);
-                              setShowSummary(false);
-                            }}
-                            className={`p-3.5 rounded-2xl border-2 text-center transition-all ${
-                              isSelected 
-                                ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-600/10' 
-                                : 'bg-white border-slate-150 hover:border-indigo-200 hover:bg-slate-50 text-slate-700'
-                            }`}
-                          >
-                            <span className="block font-black text-xs leading-none mb-1">
-                              {cat === 'Gremio' ? 'Grêmio' : cat === 'Representante' ? 'Representante' : cat === 'Alimentação' ? 'Alimentação' : 'Outros'}
-                            </span>
-                            <span className={`inline-flex items-center gap-1.5 text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
-                              votedInThisCat 
-                                ? isSelected ? 'bg-white/20 text-white' : 'bg-green-150 text-green-700'
-                                : isSelected ? 'bg-white/10 text-indigo-100' : 'bg-amber-100 text-amber-700'
-                            }`}>
-                              <i className={`fas ${votedInThisCat ? 'fa-check' : 'fa-hourglass-half'}`}></i>
-                              {votedInThisCat ? 'Votado' : 'Pendente'}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {showSummary ? (
-                    <div className="bg-slate-50 p-8 sm:p-12 rounded-3xl border-2 border-slate-200 shadow-sm animate-fadeIn">
-                      <div className="text-center mb-10">
-                        <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-4xl mb-6 shadow-inner">
-                          <i className="fas fa-clipboard-check"></i>
-                        </div>
-                        <h3 className="text-3xl font-black text-slate-800 mb-2">Resumo das Votações</h3>
-                        <p className="text-slate-500 max-w-md mx-auto">Confira abaixo os votos que você registrou nesta urna. Eles já foram computados criptograficamente.</p>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {(['Gremio', 'Representante', 'Alimentação', 'Outros'] as const).map((cat) => {
-                          const vote = schoolSelections.find(s => s.matricula === currentStudent.matricula && s.category === cat);
-                          const meal = vote ? schoolMealOptions.find(m => m.id === vote.mealId) : null;
-                          
-                          return (
-                            <div key={cat} className="bg-white p-5 rounded-2xl border border-slate-200 flex items-center gap-4 shadow-sm hover:shadow-md transition-shadow">
-                              <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${vote ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
-                                <i className={`fas ${cat === 'Gremio' ? 'fa-users' : cat === 'Representante' ? 'fa-user-tie' : cat === 'Alimentação' ? 'fa-utensils' : 'fa-clipboard-list'} text-xl`}></i>
-                              </div>
-                              <div className="overflow-hidden">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{cat === 'Gremio' ? 'Grêmio Escolar' : cat === 'Representante' ? 'Representante de Classe' : cat === 'Alimentação' ? 'Alimentação' : 'Outros'}</p>
-                                <p className={`font-bold truncate ${vote ? 'text-slate-800 text-base' : 'text-slate-400 italic text-sm'}`}>
-                                  {meal ? meal.name : 'Pendente (Não votou)'}
-                                </p>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      
-                      <div className="mt-10 flex justify-center">
-                        <button 
-                          onClick={logout} 
-                          className="bg-slate-800 text-white font-extrabold px-10 py-4 rounded-xl shadow-lg hover:shadow-xl hover:bg-slate-900 transition-all active:scale-95 text-sm flex items-center gap-3"
-                        >
-                          <i className="fas fa-sign-out-alt"></i>
-                          Finalizar e Sair do Sistema
-                        </button>
-                      </div>
-                    </div>
-                  ) : hasAlreadyVoted ? (
-                    <div className="bg-gradient-to-br from-green-500 to-emerald-600 p-10 rounded-3xl text-center text-white shadow-xl animate-fadeIn">
-                      <div className="w-20 h-20 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center mx-auto text-4xl mb-6">
-                        <i className="fas fa-check-double animate-pulse"></i>
-                      </div>
-                      <h3 className="text-3xl font-black mb-2">Voto Registrado no Sistema!</h3>
-                      <p className="text-white/80 text-base mb-8 max-w-md mx-auto">
-                        Seu voto para <strong>{selectedCategory === 'Gremio' ? 'Grêmio Escolar' : selectedCategory === 'Representante' ? 'Representante de Classe' : selectedCategory === 'Alimentação' ? 'Alimentação / Merenda' : 'Outros Assuntos'}</strong> já foi computado criptograficamente com sucesso nesta urna. Escolha outra aba acima ou finalize sua sessão.
-                      </p>
-                      {nextPendingCategory ? (
-                        <button 
-                          onClick={() => {
-                            setSelectedCategory(nextPendingCategory);
-                            setSelectedMealId(null);
-                          }} 
-                          className="bg-white text-emerald-600 font-extrabold px-8 py-3.5 rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95 text-sm"
-                        >
-                          Ir para Próxima Votação
-                        </button>
-                      ) : (
-                        <button 
-                          onClick={() => setShowSummary(true)} 
-                          className="bg-white text-emerald-600 font-extrabold px-8 py-3.5 rounded-xl shadow-lg hover:shadow-xl transition-all active:scale-95 text-sm"
-                        >
-                          Concluir e Voltar ao Início
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-xl font-bold text-slate-800">
-                          {selectedCategory === 'Gremio' ? 'Candidatos do Grêmio Escolar' : 
-                           selectedCategory === 'Representante' ? 'Representantes de Classe' : 
-                           selectedCategory === 'Alimentação' ? 'Selecione a Opção de Refeição' : 
-                           'Projetos e Assuntos Gerais'}
-                        </h3>
-                        <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-150 uppercase tracking-wider">
-                          Uso Individual
-                        </span>
-                      </div>
-                      
-                      {activeMeals.length > 0 ? (
-                        <div className="grid grid-cols-1 gap-4">
-                          {activeMeals.map((meal) => (
-                            <button
-                              key={meal.id}
-                              onClick={() => handleMealSelection(meal.id)}
-                              className={`text-left p-6 rounded-3xl border-2 transition-all relative group overflow-hidden ${
-                                selectedMealId === meal.id 
-                                  ? 'border-indigo-600 bg-indigo-50/40 shadow-md ring-4 ring-indigo-500/5' 
-                                  : 'border-slate-150 bg-white hover:border-indigo-200 hover:shadow-sm'
-                              }`}
-                            >
-                              {selectedMealId === meal.id && (
-                                <div className="absolute top-4 right-4 text-indigo-600 animate-fadeIn">
-                                  <i className="fas fa-check-circle text-2xl animate-scaleUp"></i>
-                                </div>
-                              )}
-                              <div className="flex items-center gap-2 mb-3">
-                                <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md font-mono">{meal.calories}</span>
-                              </div>
-                              <h4 className="font-extrabold text-slate-900 text-xl mb-2 group-hover:text-indigo-600 transition-colors uppercase">{meal.name}</h4>
-                              <p className="text-slate-500 text-sm leading-relaxed max-w-xl">{meal.description}</p>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="bg-slate-50 p-12 text-center rounded-3xl border-2 border-dashed border-slate-200">
-                          <i className="fas fa-folder-open text-4xl text-slate-300 mb-3"></i>
-                          <p className="text-slate-500 font-bold">Nenhum candidato ou opção cadastrada nesta categoria no momento.</p>
-                        </div>
-                      )}
-
-                      {selectedMealId && (
-                        <div className="bg-slate-900 p-8 rounded-3xl text-white shadow-2xl animate-fadeIn space-y-6 relative overflow-hidden">
-                          <div className="absolute top-0 right-0 p-8 opacity-10">
-                            <i className="fas fa-ticket-alt text-8xl -rotate-12 text-slate-800"></i>
-                          </div>
-                          
-                          <div className="pt-2">
-                            <button 
-                              onClick={confirmSelection}
-                              className="w-full bg-indigo-500 hover:bg-indigo-400 text-white font-black py-5 rounded-2xl shadow-lg transition-all active:scale-[0.98] text-xl flex items-center justify-center gap-3"
-                            >
-                              CONFIRMAR SEU VOTO
-                              <i className="fas fa-arrow-right text-sm"></i>
-                            </button>
-                            <p className="text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-4">
-                              Ao confirmar, sua decisão será gravada para esta cédula de voto.
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Sidebar Stats */}
-                <div className="space-y-6">
-                   <StatsDashboard selections={schoolSelections} mealOptions={schoolMealOptions} />
-                </div>
-              </div>
+              <StudentVotingDashboard
+                currentStudent={currentStudent}
+                votingSessions={schoolVotingSessions.length > 0 ? schoolVotingSessions : votingSessions}
+                mealOptions={schoolMealOptions}
+                selections={schoolSelections}
+                onCastVote={handleCastVoteInSession}
+                onLogout={logout}
+              />
             )}
           </>
         )}

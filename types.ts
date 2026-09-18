@@ -41,6 +41,19 @@ export interface Selection {
   sala: string;
   turma?: string;
   schoolId?: string;
+  votingSessionId?: string;
+}
+
+export interface VotingSession {
+  id: string;
+  title: string;
+  description?: string;
+  category: 'Alimentação' | 'Gremio' | 'Representante' | 'Outros';
+  date: string; // YYYY-MM-DD
+  optionIds: string[]; // IDs of the selected enabled MealOptions
+  active: boolean;
+  schoolId?: string;
+  createdAt?: string;
 }
 
 export interface AppState {
@@ -48,5 +61,6 @@ export interface AppState {
   selections: Selection[];
   registeredStudents: Student[];
   mealOptions: MealOption[];
+  votingSessions?: VotingSession[];
   schools: School[];
 }

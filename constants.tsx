@@ -1,4 +1,51 @@
-import { MealOption, Student } from './types';
+import { MealOption, Student, VotingSession } from './types';
+
+const getTodayDateStr = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+export const INITIAL_VOTING_SESSIONS: VotingSession[] = [
+  {
+    id: 'session-gremio-2026',
+    title: 'Eleição Geral do Grêmio Estudantil',
+    description: 'Escolha a chapa de liderança estudantil que representará a escola nas atividades cívicas e culturais.',
+    category: 'Gremio',
+    date: getTodayDateStr(),
+    optionIds: ['gremio-chapa-a', 'gremio-chapa-b'],
+    active: true
+  },
+  {
+    id: 'session-rep-2026',
+    title: 'Eleição de Representante de Turma',
+    description: 'Votação oficial de classe para escolha do porta-voz dos alunos junto à coordenação pedagógica.',
+    category: 'Representante',
+    date: getTodayDateStr(),
+    optionIds: ['rep-joao', 'rep-maria'],
+    active: true
+  },
+  {
+    id: 'session-alim-2026',
+    title: 'Votação do Cardápio Semanal da Merenda',
+    description: 'Definição do prato principal preferido da comunidade escolar para o almoço e lanche.',
+    category: 'Alimentação',
+    date: getTodayDateStr(),
+    optionIds: ['alim-1', 'alim-2'],
+    active: true
+  },
+  {
+    id: 'session-outros-2026',
+    title: 'Consulta Estudantil: Feira de Ciências e Projetos',
+    description: 'Consulta aos alunos sobre a programação e aprovação do calendário dos projetos e feiras.',
+    category: 'Outros',
+    date: getTodayDateStr(),
+    optionIds: ['outros-1', 'outros-2'],
+    active: true
+  }
+];
 
 export const MEAL_OPTIONS: MealOption[] = [
   { id: 'gremio-chapa-a', name: 'Chapa A - Inovação', description: 'Por uma escola mais tecnológica e inclusiva.', category: 'Gremio', calories: 'Chapa 10', active: true },
