@@ -56,6 +56,14 @@ export interface VotingSession {
   createdAt?: string;
 }
 
+export interface AttendanceRecord {
+  id: string; // e.g. `${schoolId || 'default'}_${date}`
+  date: string; // YYYY-MM-DD
+  schoolId?: string;
+  presentMatriculas: string[]; // Matrículas dos alunos marcados como presentes
+  updatedAt: string;
+}
+
 export interface AppState {
   currentStudent: Student | null;
   selections: Selection[];
@@ -63,4 +71,5 @@ export interface AppState {
   mealOptions: MealOption[];
   votingSessions?: VotingSession[];
   schools: School[];
+  attendanceRecords?: AttendanceRecord[];
 }

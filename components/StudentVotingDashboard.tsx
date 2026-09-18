@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { Student, VotingSession, MealOption, Selection } from '../types';
+import { Student, VotingSession, MealOption, Selection, AttendanceRecord } from '../types';
 
 interface StudentVotingDashboardProps {
   currentStudent: Student;
   votingSessions: VotingSession[];
   mealOptions: MealOption[];
   selections: Selection[];
+  attendanceRecords?: AttendanceRecord[];
   onCastVote: (session: VotingSession, optionId: string) => Promise<void> | void;
   onLogout: () => void;
 }
@@ -15,6 +16,7 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
   votingSessions,
   mealOptions,
   selections,
+  attendanceRecords = [],
   onCastVote,
   onLogout
 }) => {
@@ -75,6 +77,30 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
       s => s.matricula === currentStudent.matricula &&
            (s.votingSessionId === session.id || (!s.votingSessionId && s.category === session.category))
     );
+  };
+
+  // Attendance & voting eligibility check for a session
+  const isStudentEligibleToVote = (session: VotingSession) => {
+    if (!attendanceRecords || attendanceRecords.length === 0) {
+      return { eligible: true };
+    }
+
+    const sessionDate = session.date || new Date().toISOString().split('T')[0];
+    const attendance = attendanceRecords.find(a => a.date === sessionDate);
+
+    // If an attendance record was submitted by the school for that session's date:
+    if (attendance) {
+      const isPresent = attendance.presentMatriculas.includes(currentStudent.matricula);
+      if (!isPresent) {
+        return {
+          eligible: false,
+          sessionDate,
+          reason: `Você foi registrado como faltoso na chamada de ${sessionDate.split('-').reverse().join('/')}. Apenas alunos com presença confirmada em aula podem votar nesta eleição.`
+        };
+      }
+    }
+
+    return { eligible: true, sessionDate };
   };
 
   // Compute metrics
@@ -161,6 +187,15 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
   // Handle vote confirmation
   const handleConfirmVote = async () => {
     if (!currentSession || !selectedOptionId) return;
+
+    // Strict attendance validation
+    const attCheck = isStudentEligibleToVote(currentSession);
+    if (!attCheck.eligible) {
+      alert(attCheck.reason || "Voto bloqueado: Você consta como faltoso na frequência escolar desta data.");
+      setShowConfirmModal(false);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await onCastVote(currentSession, selectedOptionId);
@@ -354,6 +389,8 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
                   : mealOptions.filter(m => m.category === session.category && m.active).length;
                 const sessionDateFormatted = session.date ? session.date.split('-').reverse().join('/') : 'Em aberto';
                 const todaySession = session.date ? isToday(session.date) : false;
+                const attendanceCheck = isStudentEligibleToVote(session);
+                const isAttendanceBlocked = !isVoted && !attendanceCheck.eligible;
 
                 return (
                   <div
@@ -361,9 +398,11 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
                     className={`bg-white rounded-3xl border-2 transition-all p-6 flex flex-col justify-between relative group ${
                       isVoted 
                         ? 'border-emerald-200 shadow-sm bg-gradient-to-b from-white to-emerald-50/20' 
-                        : session.active 
-                          ? 'border-slate-200/90 hover:border-indigo-500 hover:shadow-lg' 
-                          : 'border-slate-200 bg-slate-50/70 opacity-80'
+                        : isAttendanceBlocked
+                          ? 'border-rose-200 bg-rose-50/20'
+                          : session.active 
+                            ? 'border-slate-200/90 hover:border-indigo-500 hover:shadow-lg' 
+                            : 'border-slate-200 bg-slate-50/70 opacity-80'
                     }`}
                   >
                     <div>
@@ -384,6 +423,11 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
                             <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
                               <i className="fas fa-check-circle"></i>
                               Voto Registrado
+                            </span>
+                          ) : isAttendanceBlocked ? (
+                            <span className="text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 px-2.5 py-0.5 rounded-full border border-rose-200 flex items-center gap-1">
+                              <i className="fas fa-user-times"></i>
+                              Faltoso (Bloqueado)
                             </span>
                           ) : session.active ? (
                             <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-full border border-indigo-200">
@@ -417,6 +461,21 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
                         </div>
                       </div>
 
+                      {/* If student is blocked by attendance */}
+                      {isAttendanceBlocked && (
+                        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3.5 mb-5 flex items-start gap-2.5">
+                          <i className="fas fa-user-slash text-rose-600 text-sm mt-0.5 shrink-0"></i>
+                          <div>
+                            <span className="text-[10px] font-black uppercase tracking-wider text-rose-800 block">
+                              Voto Não Permitido (Frequência Escolar)
+                            </span>
+                            <span className="text-xs font-semibold text-rose-900 block leading-tight mt-0.5">
+                              {attendanceCheck.reason}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
                       {/* If student already voted in this session */}
                       {isVoted && votedMeal && (
                         <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 mb-5 flex items-center gap-3">
@@ -446,6 +505,14 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
                         >
                           <i className="fas fa-receipt"></i>
                           Ver Comprovante Eleitoral
+                        </button>
+                      ) : isAttendanceBlocked ? (
+                        <button
+                          disabled
+                          className="w-full py-3.5 px-4 rounded-xl font-black text-xs bg-rose-100 text-rose-700 border border-rose-200 cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                          <i className="fas fa-ban"></i>
+                          Voto Bloqueado (Aluno Faltoso)
                         </button>
                       ) : session.active ? (
                         <button
@@ -592,6 +659,31 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
                   Voltar para Todas as Votações
                 </button>
               </div>
+            </div>
+          ) : !isStudentEligibleToVote(currentSession).eligible ? (
+            <div className="bg-rose-50 border-2 border-rose-200 rounded-3xl p-8 sm:p-12 text-center shadow-lg animate-fadeIn">
+              <div className="w-20 h-20 bg-rose-600 text-white rounded-full flex items-center justify-center mx-auto text-3xl mb-5 shadow-lg shadow-rose-600/30">
+                <i className="fas fa-user-slash"></i>
+              </div>
+              <h3 className="text-2xl font-black text-rose-950 mb-2">Votação Não Permitida para Esta Data</h3>
+              <p className="text-rose-800 text-sm max-w-lg mx-auto mb-4 font-semibold leading-relaxed">
+                {isStudentEligibleToVote(currentSession).reason}
+              </p>
+              <div className="bg-white/80 border border-rose-200 p-4 rounded-2xl max-w-md mx-auto mb-6 text-xs text-slate-600 text-left space-y-1.5">
+                <span className="font-black text-rose-900 block uppercase text-[10px] tracking-wider">Regulamento Eleitoral Escolar:</span>
+                <p>• Apenas estudantes que registraram presença regular em sala de aula no dia da eleição possuem habilitação para registrar votos nas urnas eletrônicas.</p>
+                <p>• Se você esteve presente e acredita que houve uma divergência no lançamento da frequência, solicite à mesa ou coordenação a retificação da sua chamada.</p>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedSessionId(null);
+                  setSelectedOptionId(null);
+                }}
+                className="px-6 py-3 bg-rose-700 hover:bg-rose-800 text-white font-black text-xs rounded-xl shadow-md transition-all inline-flex items-center gap-2"
+              >
+                <i className="fas fa-arrow-left"></i>
+                Voltar para Minhas Votações
+              </button>
             </div>
           ) : (
             /* BALLOT CANDIDATES LIST */

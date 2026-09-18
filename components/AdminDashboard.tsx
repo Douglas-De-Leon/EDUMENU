@@ -3,8 +3,10 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, Legend, AreaChart, Area
 } from 'recharts';
-import { Selection, MealOption, Student, VotingSession } from '../types';
+import { Selection, MealOption, Student, VotingSession, AttendanceRecord } from '../types';
 import { VotingManagement } from './VotingManagement';
+import { VotingTrackingDashboard } from './VotingTrackingDashboard';
+import { StudentAttendanceManagement } from './StudentAttendanceManagement';
 
 interface AdminDashboardProps {
   selections: Selection[];
@@ -17,6 +19,9 @@ interface AdminDashboardProps {
   onUpdateVotingSession?: (session: VotingSession) => void;
   onDeleteVotingSession?: (id: string) => void;
   students: Student[];
+  attendanceRecords?: AttendanceRecord[];
+  onSaveAttendance?: (date: string, presentMatriculas: string[]) => Promise<void> | void;
+  currentSchoolId?: string | null;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
@@ -29,10 +34,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onAddVotingSession,
   onUpdateVotingSession,
   onDeleteVotingSession,
-  students 
+  students,
+  attendanceRecords = [],
+  onSaveAttendance,
+  currentSchoolId
 }) => {
-  // Tabs for managing votings, options or viewing results
-  const [activeTab, setActiveTab] = useState<'votings' | 'options' | 'analytics'>('votings');
+  // Tabs for managing votings, options, tracking, attendance or viewing results
+  const [activeTab, setActiveTab] = useState<'votings' | 'options' | 'tracking' | 'attendance' | 'analytics'>('votings');
   
   // Category filter for the results dashboard
   const [selectedCategory, setSelectedCategory] = useState<'Gremio' | 'Representante' | 'Alimentação' | 'Outros'>('Gremio');
@@ -352,18 +360,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       )}
 
       {/* Admin Tab Controller Bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50 p-2 rounded-2xl border border-slate-200/60 shadow-inner">
-        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-slate-50 p-2 rounded-2xl border border-slate-200/60 shadow-inner">
+        <div className="flex flex-wrap gap-2 w-full lg:w-auto">
           <button 
             onClick={() => setActiveTab('votings')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
               activeTab === 'votings' 
                 ? 'bg-white shadow-sm text-indigo-700 font-black' 
                 : 'text-slate-600 hover:text-slate-800'
             }`}
           >
             <i className="fas fa-calendar-plus"></i>
-            Criar e Agendar Votação
+            Criar Votação
             {votingSessions.length > 0 && (
               <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-bold">
                 {votingSessions.length}
@@ -372,28 +380,50 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </button>
           <button 
             onClick={() => setActiveTab('options')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
               activeTab === 'options' 
                 ? 'bg-white shadow-sm text-indigo-700 font-black' 
                 : 'text-slate-600 hover:text-slate-800'
             }`}
           >
             <i className="fas fa-vote-yea"></i>
-            Cadastrar Opções / Candidatos
+            Opções / Candidatos
+          </button>
+          <button 
+            onClick={() => setActiveTab('tracking')}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              activeTab === 'tracking' 
+                ? 'bg-white shadow-sm text-indigo-700 font-black' 
+                : 'text-slate-600 hover:text-slate-800'
+            }`}
+          >
+            <i className="fas fa-chart-line text-indigo-600"></i>
+            Acompanhamento do Dia & Histórico
+          </button>
+          <button 
+            onClick={() => setActiveTab('attendance')}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              activeTab === 'attendance' 
+                ? 'bg-white shadow-sm text-emerald-700 font-black' 
+                : 'text-slate-600 hover:text-slate-800'
+            }`}
+          >
+            <i className="fas fa-user-check text-emerald-600"></i>
+            Frequência de Alunos
           </button>
           <button 
             onClick={() => setActiveTab('analytics')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
               activeTab === 'analytics' 
                 ? 'bg-white shadow-sm text-indigo-700 font-black' 
                 : 'text-slate-600 hover:text-slate-800'
             }`}
           >
             <i className="fas fa-chart-pie"></i>
-            Apuração Geral e Gráficos
+            Apuração Geral
           </button>
         </div>
-        <div className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 flex items-center gap-2">
+        <div className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 flex items-center gap-2 self-end lg:self-auto">
           <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping"></span>
           <span>{totalGlobalVotes} votos totais de {totalRegisteredStudents} estudantes</span>
         </div>
@@ -837,6 +867,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {activeTab === 'tracking' && (
+        <VotingTrackingDashboard
+          selections={selections}
+          mealOptions={mealOptions}
+          votingSessions={votingSessions}
+          students={students}
+          attendanceRecords={attendanceRecords}
+        />
+      )}
+
+      {activeTab === 'attendance' && (
+        <StudentAttendanceManagement
+          students={students}
+          attendanceRecords={attendanceRecords}
+          onSaveAttendance={onSaveAttendance || (async () => {})}
+          currentSchoolId={currentSchoolId}
+        />
       )}
 
       {activeTab === 'votings' && (

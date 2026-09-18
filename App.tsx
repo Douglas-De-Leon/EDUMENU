@@ -6,10 +6,26 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { UserManagementDashboard } from './components/UserManagementDashboard';
 import { MasterDashboard } from './components/MasterDashboard';
 import { LandingPage } from './components/LandingPage';
-import { Student, Selection, MealOption, AdminUser, School, VotingSession } from './types';
+import { Student, Selection, MealOption, AdminUser, School, VotingSession, AttendanceRecord } from './types';
 import { MEAL_OPTIONS, INITIAL_STUDENTS, INITIAL_VOTING_SESSIONS } from './constants';
 import { db } from './firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, getDoc, getDocs } from 'firebase/firestore';
+import { 
+  collection, 
+  doc, 
+  setDoc, 
+  deleteDoc, 
+  getDoc, 
+  getDocs, 
+  query, 
+  where, 
+  limit 
+} from 'firebase/firestore';
+import { 
+  getCachedData, 
+  setCachedData, 
+  CACHE_KEYS, 
+  getLastSyncTime 
+} from './utils/storageCache';
 import { handleFirestoreError, OperationType } from './utils/firestoreErrorHandler';
 import { StudentVotingDashboard } from './components/StudentVotingDashboard';
 
@@ -28,15 +44,39 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('currentStudent');
     return saved ? JSON.parse(saved) : null;
   });
-  const [registeredStudents, setRegisteredStudents] = useState<Student[]>(INITIAL_STUDENTS);
-  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
-  const [schools, setSchools] = useState<School[]>([]);
+  const [registeredStudents, setRegisteredStudents] = useState<Student[]>(() => {
+    return getCachedData<Student[]>(CACHE_KEYS.STUDENTS) || INITIAL_STUDENTS;
+  });
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>(() => {
+    return getCachedData<AdminUser[]>(CACHE_KEYS.ADMINS) || [];
+  });
+  const [schools, setSchools] = useState<School[]>(() => {
+    return getCachedData<School[]>(CACHE_KEYS.SCHOOLS) || [];
+  });
   const [currentSchoolId, setCurrentSchoolId] = useState<string | null>(() => {
     return localStorage.getItem('currentSchoolId') || null;
   });
-  const [selections, setSelections] = useState<Selection[]>([]);
-  const [mealOptions, setMealOptions] = useState<MealOption[]>(MEAL_OPTIONS);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(() => {
+    return getCachedData<AttendanceRecord[]>(CACHE_KEYS.ATTENDANCE) || [];
+  });
+  const [selections, setSelections] = useState<Selection[]>(() => {
+    const savedRole = localStorage.getItem('userRole');
+    const savedStudentStr = localStorage.getItem('currentStudent');
+    if (savedRole === 'student' && savedStudentStr) {
+      try {
+        const student = JSON.parse(savedStudentStr);
+        const cachedVotes = getCachedData<Selection[]>(CACHE_KEYS.STUDENT_VOTES(student.matricula));
+        if (cachedVotes) return cachedVotes;
+      } catch (e) {}
+    }
+    return getCachedData<Selection[]>(CACHE_KEYS.SELECTIONS) || [];
+  });
+  const [mealOptions, setMealOptions] = useState<MealOption[]>(() => {
+    return getCachedData<MealOption[]>(CACHE_KEYS.MEALS) || MEAL_OPTIONS;
+  });
   const [votingSessions, setVotingSessions] = useState<VotingSession[]>(() => {
+    const cached = getCachedData<VotingSession[]>(CACHE_KEYS.SESSIONS);
+    if (cached && Array.isArray(cached) && cached.length > 0) return cached;
     const saved = localStorage.getItem('votingSessions');
     if (saved) {
       try {
@@ -51,6 +91,11 @@ const App: React.FC = () => {
   const [selectedMealId, setSelectedMealId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(() => 
+    getLastSyncTime(CACHE_KEYS.SELECTIONS) || getLastSyncTime(CACHE_KEYS.SESSIONS)
+  );
+
   const schoolMealOptions = mealOptions.filter(m => userRole === 'master' || (currentSchoolId && m.schoolId === currentSchoolId));
   const schoolSelections = selections.filter(s => userRole === 'master' || (currentSchoolId && s.schoolId === currentSchoolId));
   const schoolStudents = registeredStudents.filter(s => userRole === 'master' || (currentSchoolId && s.schoolId === currentSchoolId));
@@ -58,98 +103,204 @@ const App: React.FC = () => {
 
   useEffect(() => {
     localStorage.setItem('votingSessions', JSON.stringify(votingSessions));
+    setCachedData(CACHE_KEYS.SESSIONS, votingSessions);
   }, [votingSessions]);
 
-  // Persistence (Firestore)
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        const [studentsSnap, schoolsSnap, adminsSnap, mealsSnap, selectionsSnap, sessionsSnap] = await Promise.all([
-          getDocs(collection(db, 'students')),
-          getDocs(collection(db, 'schools')),
-          getDocs(collection(db, 'admins')),
-          getDocs(collection(db, 'meals')),
-          getDocs(collection(db, 'selections')),
-          getDocs(collection(db, 'voting_sessions'))
-        ]);
-
-        const studentsData: Student[] = [];
-        studentsSnap.forEach((doc) => {
-          const s = doc.data() as Student;
-          studentsData.push({
-            ...s,
-            turno: s.turno || 'Integral',
-            sala: s.sala || '1º Ano',
-            turma: s.turma || 'A'
-          });
-        });
-        if (studentsData.length > 0) {
-          setRegisteredStudents(studentsData);
-        } else {
-          setRegisteredStudents([]);
+  // Carregamento ultra-otimizado para o aluno (cache inteligente + busca apenas seus próprios votos)
+  const loadStudentData = async (student: Student, forceRefresh = false) => {
+    try {
+      // 1. Sessões de votação (usa cache de 20 minutos para 0 leituras repetidas)
+      let sessions = getCachedData<VotingSession[]>(CACHE_KEYS.SESSIONS, 20);
+      if (!sessions || forceRefresh) {
+        const snap = await getDocs(collection(db, 'voting_sessions'));
+        const list: VotingSession[] = [];
+        snap.forEach(d => list.push(d.data() as VotingSession));
+        if (list.length > 0) {
+          sessions = list;
+          setVotingSessions(list);
+          setCachedData(CACHE_KEYS.SESSIONS, list);
         }
+      } else {
+        setVotingSessions(sessions);
+      }
 
-        const schoolsData: School[] = [];
-        schoolsSnap.forEach((doc) => {
-          schoolsData.push(doc.data() as School);
-        });
-        setSchools(schoolsData);
-
-        const adminsData: AdminUser[] = [];
-        adminsSnap.forEach((doc) => {
-          adminsData.push(doc.data() as AdminUser);
-        });
-        setAdminUsers(adminsData);
-
-        const mealsData: MealOption[] = [];
-        mealsSnap.forEach((doc) => {
-          const m = doc.data() as any;
-          mealsData.push({
+      // 2. Opções e candidatos (usa cache de 20 minutos)
+      let meals = getCachedData<MealOption[]>(CACHE_KEYS.MEALS, 20);
+      if (!meals || forceRefresh) {
+        const snap = await getDocs(collection(db, 'meals'));
+        const list: MealOption[] = [];
+        snap.forEach(d => {
+          const m = d.data() as any;
+          list.push({
             ...m,
             category: (m.category === 'Padrao' ? 'Gremio' : m.category === 'Vegetariana' ? 'Alimentação' : m.category === 'Especial' ? 'Outros' : m.category) || 'Outros'
           });
         });
-        if (mealsData.length > 0) {
-          setMealOptions(mealsData);
-        } else {
-          setMealOptions([]);
+        if (list.length > 0) {
+          meals = list;
+          setMealOptions(list);
+          setCachedData(CACHE_KEYS.MEALS, list);
         }
-
-        const selectionsData: Selection[] = [];
-        selectionsSnap.forEach((doc) => {
-          const s = doc.data() as any;
-          selectionsData.push({
-            ...s,
-            category: s.category || 'Gremio',
-            turno: s.turno || 'Integral',
-            sala: s.sala || '1º Ano',
-            turma: s.turma || 'A'
-          });
-        });
-        setSelections(selectionsData);
-
-        const sessionsData: VotingSession[] = [];
-        sessionsSnap.forEach((doc) => {
-          const vs = doc.data() as VotingSession;
-          sessionsData.push(vs);
-        });
-        if (sessionsData.length > 0) {
-          setVotingSessions(sessionsData);
-        } else {
-          setVotingSessions(INITIAL_VOTING_SESSIONS);
-        }
-      } catch (error: any) {
-        handleFirestoreError(error, OperationType.LIST, 'initial_fetch');
-        if (error.message?.includes('permission')) {
-          setError('Acesso negado ao Firebase: Leia as instruções do assistente para alterar as Regras de Segurança do Firestore.');
-        }
+      } else {
+        setMealOptions(meals);
       }
-    };
 
-    fetchInitialData();
-  }, []);
+      // 3. Votos do aluno: carrega APENAS os votos deste aluno (where matricula == student.matricula)
+      // Evita baixar centenas ou milhares de votos de outros alunos da escola!
+      let studentVotes = getCachedData<Selection[]>(CACHE_KEYS.STUDENT_VOTES(student.matricula), 15);
+      if (!studentVotes || forceRefresh) {
+        const q = query(collection(db, 'selections'), where('matricula', '==', student.matricula));
+        const snap = await getDocs(q);
+        const list: Selection[] = [];
+        snap.forEach(d => list.push(d.data() as Selection));
+        studentVotes = list;
+        setSelections(list);
+        setCachedData(CACHE_KEYS.STUDENT_VOTES(student.matricula), list);
+      } else {
+        setSelections(studentVotes);
+      }
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+      // 4. Frequência escolar (cache de 15 minutos para manter 0 leituras extras)
+      let cachedAtt = getCachedData<AttendanceRecord[]>(CACHE_KEYS.ATTENDANCE, 15);
+      if (!cachedAtt || forceRefresh) {
+        try {
+          const attSnap = await getDocs(collection(db, 'attendance'));
+          const attList: AttendanceRecord[] = [];
+          attSnap.forEach(d => attList.push(d.data() as AttendanceRecord));
+          cachedAtt = attList;
+          setAttendanceRecords(attList);
+          setCachedData(CACHE_KEYS.ATTENDANCE, attList);
+        } catch (e) {}
+      } else {
+        setAttendanceRecords(cachedAtt);
+      }
+    } catch (err) {
+      console.warn("Aviso ao carregar dados do aluno:", err);
+    }
+  };
+
+  // Carregamento para a gestão/admin com cache e escopo escolar
+  const loadAdminData = async (forceRefresh = false) => {
+    setIsSyncing(true);
+    try {
+      const cachedSchools = getCachedData<School[]>(CACHE_KEYS.SCHOOLS, 30);
+      const cachedAdmins = getCachedData<AdminUser[]>(CACHE_KEYS.ADMINS, 30);
+      const cachedSessions = getCachedData<VotingSession[]>(CACHE_KEYS.SESSIONS, 20);
+      const cachedMeals = getCachedData<MealOption[]>(CACHE_KEYS.MEALS, 20);
+      const cachedStudents = getCachedData<Student[]>(CACHE_KEYS.STUDENTS, 15);
+      const cachedSelections = getCachedData<Selection[]>(CACHE_KEYS.SELECTIONS, 10);
+      const cachedAttendance = getCachedData<AttendanceRecord[]>(CACHE_KEYS.ATTENDANCE, 15);
+
+      // Se houver dados válidos em cache e não for atualização manual, não consome nenhuma leitura
+      if (!forceRefresh && cachedSchools && cachedAdmins && cachedSessions && cachedMeals && cachedStudents && cachedSelections && cachedAttendance) {
+        setSchools(cachedSchools);
+        setAdminUsers(cachedAdmins);
+        setVotingSessions(cachedSessions);
+        setMealOptions(cachedMeals);
+        setRegisteredStudents(cachedStudents);
+        setSelections(cachedSelections);
+        setAttendanceRecords(cachedAttendance);
+        setIsSyncing(false);
+        setLastSync(getLastSyncTime(CACHE_KEYS.SELECTIONS) || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        return;
+      }
+
+      const promises: Promise<any>[] = [
+        getDocs(collection(db, 'schools')),
+        getDocs(collection(db, 'admins')),
+        getDocs(collection(db, 'meals')),
+        getDocs(collection(db, 'voting_sessions')),
+        getDocs(collection(db, 'attendance'))
+      ];
+
+      // Se for gestor escolar, filtra alunos e votos apenas da escola para economizar leituras
+      if (userRole === 'admin' && currentSchoolId) {
+        promises.push(getDocs(query(collection(db, 'students'), where('schoolId', '==', currentSchoolId))));
+        promises.push(getDocs(query(collection(db, 'selections'), where('schoolId', '==', currentSchoolId))));
+      } else {
+        promises.push(getDocs(collection(db, 'students')));
+        promises.push(getDocs(collection(db, 'selections')));
+      }
+
+      const [schoolsSnap, adminsSnap, mealsSnap, sessionsSnap, attendanceSnap, studentsSnap, selectionsSnap] = await Promise.all(promises);
+
+      const schoolsData: School[] = [];
+      schoolsSnap.forEach((d: any) => schoolsData.push(d.data() as School));
+      setSchools(schoolsData);
+      setCachedData(CACHE_KEYS.SCHOOLS, schoolsData);
+
+      const adminsData: AdminUser[] = [];
+      adminsSnap.forEach((d: any) => adminsData.push(d.data() as AdminUser));
+      setAdminUsers(adminsData);
+      setCachedData(CACHE_KEYS.ADMINS, adminsData);
+
+      const attendanceData: AttendanceRecord[] = [];
+      attendanceSnap.forEach((d: any) => attendanceData.push(d.data() as AttendanceRecord));
+      setAttendanceRecords(attendanceData);
+      setCachedData(CACHE_KEYS.ATTENDANCE, attendanceData);
+
+      const mealsData: MealOption[] = [];
+      mealsSnap.forEach((d: any) => {
+        const m = d.data() as any;
+        mealsData.push({
+          ...m,
+          category: (m.category === 'Padrao' ? 'Gremio' : m.category === 'Vegetariana' ? 'Alimentação' : m.category === 'Especial' ? 'Outros' : m.category) || 'Outros'
+        });
+      });
+      if (mealsData.length > 0) {
+        setMealOptions(mealsData);
+        setCachedData(CACHE_KEYS.MEALS, mealsData);
+      }
+
+      const sessionsData: VotingSession[] = [];
+      sessionsSnap.forEach((d: any) => sessionsData.push(d.data() as VotingSession));
+      if (sessionsData.length > 0) {
+        setVotingSessions(sessionsData);
+        setCachedData(CACHE_KEYS.SESSIONS, sessionsData);
+      }
+
+      const studentsData: Student[] = [];
+      studentsSnap.forEach((d: any) => {
+        const s = d.data() as Student;
+        studentsData.push({
+          ...s,
+          turno: s.turno || 'Integral',
+          sala: s.sala || '1º Ano',
+          turma: s.turma || 'A'
+        });
+      });
+      if (studentsData.length > 0) {
+        setRegisteredStudents(studentsData);
+        setCachedData(CACHE_KEYS.STUDENTS, studentsData);
+      }
+
+      const selectionsData: Selection[] = [];
+      selectionsSnap.forEach((d: any) => selectionsData.push(d.data() as Selection));
+      setSelections(selectionsData);
+      setCachedData(CACHE_KEYS.SELECTIONS, selectionsData);
+
+      const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setLastSync(nowTime);
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.LIST, 'admin_fetch');
+      if (error.message?.includes('permission')) {
+        setError('Acesso negado ao Firebase: Verifique as Regras de Segurança do Firestore.');
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Executa busca apenas para usuários autenticados (NENHUMA leitura na Landing Page!)
+  useEffect(() => {
+    if (userRole === 'student' && currentStudent) {
+      loadStudentData(currentStudent);
+    } else if (userRole === 'admin' || userRole === 'master') {
+      loadAdminData();
+    }
+  }, [userRole]);
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     
@@ -158,8 +309,38 @@ const App: React.FC = () => {
       return;
     }
 
+    const cleanId = loginId.trim();
+    const cleanPass = loginPassword.trim();
+
     if (loginStep === 'student_login') {
-      const student = registeredStudents.find(s => s.matricula === loginId && s.password === loginPassword);
+      // 1. Verifica no cache local/alunos pré-carregados (0 leituras no Firestore!)
+      let student = registeredStudents.find(s => s.matricula === cleanId && s.password === cleanPass);
+
+      // 2. Se não estiver no cache local, busca pontualmente APENAS o documento deste aluno no Firestore (1 leitura única!)
+      if (!student) {
+        try {
+          const docSnap = await getDoc(doc(db, 'students', cleanId));
+          if (docSnap.exists()) {
+            const data = docSnap.data() as Student;
+            if (data.password === cleanPass) {
+              student = {
+                ...data,
+                turno: data.turno || 'Integral',
+                sala: data.sala || '1º Ano',
+                turma: data.turma || 'A'
+              };
+              setRegisteredStudents(prev => {
+                const next = [...prev.filter(s => s.matricula !== cleanId), student!];
+                setCachedData(CACHE_KEYS.STUDENTS, next);
+                return next;
+              });
+            }
+          }
+        } catch (err) {
+          console.error("Erro ao validar login do aluno:", err);
+        }
+      }
+
       if (student) {
         setUserRole('student');
         setCurrentStudent(student);
@@ -171,29 +352,58 @@ const App: React.FC = () => {
         localStorage.setItem('userRole', 'student');
         localStorage.setItem('view', 'student');
         localStorage.setItem('currentStudent', JSON.stringify(student));
+        // Carrega apenas os dados relevantes para este aluno
+        loadStudentData(student);
       } else {
         setError("Matrícula ou senha inválidas.");
       }
     } else if (loginStep === 'admin_login') {
-      if (loginId === '84040513215' && loginPassword === 'admin123') {
+      // Login Master (0 leituras no Firestore!)
+      if (cleanId === '84040513215' && cleanPass === 'admin123') {
         setUserRole('master');
         setView('master_admins');
         localStorage.setItem('userRole', 'master');
         localStorage.setItem('view', 'master_admins');
-      } else {
-        const admin = adminUsers.find(a => a.login === loginId && a.password === loginPassword);
-        if (admin) {
-          setUserRole('admin');
-          setView('admin');
-          if (admin.schoolId) {
-            setCurrentSchoolId(admin.schoolId);
-            localStorage.setItem('currentSchoolId', admin.schoolId);
+        loadAdminData();
+        return;
+      }
+
+      // Verifica admins no cache
+      let admin = adminUsers.find(a => a.login === cleanId && a.password === cleanPass);
+
+      // Se não encontrou no cache, faz busca pontual por login (1 leitura única!)
+      if (!admin) {
+        try {
+          const q = query(collection(db, 'admins'), where('login', '==', cleanId), limit(1));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            const data = snap.docs[0].data() as AdminUser;
+            if (data.password === cleanPass) {
+              admin = data;
+              setAdminUsers(prev => {
+                const next = [...prev.filter(a => a.id !== admin!.id), admin!];
+                setCachedData(CACHE_KEYS.ADMINS, next);
+                return next;
+              });
+            }
           }
-          localStorage.setItem('userRole', 'admin');
-          localStorage.setItem('view', 'admin');
-        } else {
-          setError("Login ou senha inválidos.");
+        } catch (err) {
+          console.error("Erro ao validar login do admin:", err);
         }
+      }
+
+      if (admin) {
+        setUserRole('admin');
+        setView('admin');
+        if (admin.schoolId) {
+          setCurrentSchoolId(admin.schoolId);
+          localStorage.setItem('currentSchoolId', admin.schoolId);
+        }
+        localStorage.setItem('userRole', 'admin');
+        localStorage.setItem('view', 'admin');
+        loadAdminData();
+      } else {
+        setError("Login ou senha inválidos.");
       }
     }
   };
@@ -204,20 +414,28 @@ const App: React.FC = () => {
   };
 
   const handleAddMeal = async (meal: MealOption) => {
+    const mealToSave = { ...meal, schoolId: currentSchoolId || meal.schoolId || '' };
     try {
-      const mealToSave = { ...meal, schoolId: currentSchoolId || meal.schoolId || '' };
       await setDoc(doc(db, 'meals', meal.id), mealToSave);
-      setMealOptions(prev => [...prev, mealToSave]);
+      setMealOptions(prev => {
+        const next = [...prev, mealToSave];
+        setCachedData(CACHE_KEYS.MEALS, next);
+        return next;
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `meals/${meal.id}`);
     }
   };
 
   const handleUpdateMeal = async (meal: MealOption) => {
+    const mealToSave = { ...meal, schoolId: currentSchoolId || meal.schoolId || '' };
     try {
-      const mealToSave = { ...meal, schoolId: currentSchoolId || meal.schoolId || '' };
       await setDoc(doc(db, 'meals', meal.id), mealToSave);
-      setMealOptions(prev => prev.map(m => m.id === meal.id ? mealToSave : m));
+      setMealOptions(prev => {
+        const next = prev.map(m => m.id === meal.id ? mealToSave : m);
+        setCachedData(CACHE_KEYS.MEALS, next);
+        return next;
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `meals/${meal.id}`);
     }
@@ -226,7 +444,11 @@ const App: React.FC = () => {
   const handleDeleteMeal = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'meals', id));
-      setMealOptions(prev => prev.filter(m => m.id !== id));
+      setMealOptions(prev => {
+        const next = prev.filter(m => m.id !== id);
+        setCachedData(CACHE_KEYS.MEALS, next);
+        return next;
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `meals/${id}`);
     }
@@ -236,10 +458,18 @@ const App: React.FC = () => {
     const sessionToSave = { ...session, schoolId: currentSchoolId || session.schoolId || '' };
     try {
       await setDoc(doc(db, 'voting_sessions', session.id), sessionToSave);
-      setVotingSessions(prev => [sessionToSave, ...prev]);
+      setVotingSessions(prev => {
+        const next = [sessionToSave, ...prev];
+        setCachedData(CACHE_KEYS.SESSIONS, next);
+        return next;
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `voting_sessions/${session.id}`);
-      setVotingSessions(prev => [sessionToSave, ...prev]);
+      setVotingSessions(prev => {
+        const next = [sessionToSave, ...prev];
+        setCachedData(CACHE_KEYS.SESSIONS, next);
+        return next;
+      });
     }
   };
 
@@ -247,38 +477,62 @@ const App: React.FC = () => {
     const sessionToSave = { ...session, schoolId: currentSchoolId || session.schoolId || '' };
     try {
       await setDoc(doc(db, 'voting_sessions', session.id), sessionToSave);
-      setVotingSessions(prev => prev.map(s => s.id === session.id ? sessionToSave : s));
+      setVotingSessions(prev => {
+        const next = prev.map(s => s.id === session.id ? sessionToSave : s);
+        setCachedData(CACHE_KEYS.SESSIONS, next);
+        return next;
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `voting_sessions/${session.id}`);
-      setVotingSessions(prev => prev.map(s => s.id === session.id ? sessionToSave : s));
+      setVotingSessions(prev => {
+        const next = prev.map(s => s.id === session.id ? sessionToSave : s);
+        setCachedData(CACHE_KEYS.SESSIONS, next);
+        return next;
+      });
     }
   };
 
   const handleDeleteVotingSession = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'voting_sessions', id));
-      setVotingSessions(prev => prev.filter(s => s.id !== id));
+      setVotingSessions(prev => {
+        const next = prev.filter(s => s.id !== id);
+        setCachedData(CACHE_KEYS.SESSIONS, next);
+        return next;
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `voting_sessions/${id}`);
-      setVotingSessions(prev => prev.filter(s => s.id !== id));
+      setVotingSessions(prev => {
+        const next = prev.filter(s => s.id !== id);
+        setCachedData(CACHE_KEYS.SESSIONS, next);
+        return next;
+      });
     }
   };
 
   const handleAddStudent = async (student: Student) => {
+    const studentToSave = { ...student, schoolId: currentSchoolId || student.schoolId || '' };
     try {
-      const studentToSave = { ...student, schoolId: currentSchoolId || student.schoolId || '' };
       await setDoc(doc(db, 'students', student.matricula), studentToSave);
-      setRegisteredStudents(prev => [...prev, studentToSave]);
+      setRegisteredStudents(prev => {
+        const next = [...prev, studentToSave];
+        setCachedData(CACHE_KEYS.STUDENTS, next);
+        return next;
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `students/${student.matricula}`);
     }
   };
 
   const handleUpdateStudent = async (student: Student) => {
+    const studentToSave = { ...student, schoolId: currentSchoolId || student.schoolId || '' };
     try {
-      const studentToSave = { ...student, schoolId: currentSchoolId || student.schoolId || '' };
       await setDoc(doc(db, 'students', student.matricula), studentToSave);
-      setRegisteredStudents(prev => prev.map(s => s.matricula === student.matricula ? studentToSave : s));
+      setRegisteredStudents(prev => {
+        const next = prev.map(s => s.matricula === student.matricula ? studentToSave : s);
+        setCachedData(CACHE_KEYS.STUDENTS, next);
+        return next;
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `students/${student.matricula}`);
     }
@@ -287,7 +541,11 @@ const App: React.FC = () => {
   const handleDeleteStudent = async (matricula: string) => {
     try {
       await deleteDoc(doc(db, 'students', matricula));
-      setRegisteredStudents(prev => prev.filter(s => s.matricula !== matricula));
+      setRegisteredStudents(prev => {
+        const next = prev.filter(s => s.matricula !== matricula);
+        setCachedData(CACHE_KEYS.STUDENTS, next);
+        return next;
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `students/${matricula}`);
     }
@@ -296,7 +554,11 @@ const App: React.FC = () => {
   const handleAddSchool = async (school: School) => {
     try {
       await setDoc(doc(db, 'schools', school.id), school);
-      setSchools(prev => [...prev, school]);
+      setSchools(prev => {
+        const next = [...prev, school];
+        setCachedData(CACHE_KEYS.SCHOOLS, next);
+        return next;
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `schools/${school.id}`);
     }
@@ -305,7 +567,11 @@ const App: React.FC = () => {
   const handleDeleteSchool = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'schools', id));
-      setSchools(prev => prev.filter(s => s.id !== id));
+      setSchools(prev => {
+        const next = prev.filter(s => s.id !== id);
+        setCachedData(CACHE_KEYS.SCHOOLS, next);
+        return next;
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `schools/${id}`);
     }
@@ -314,7 +580,11 @@ const App: React.FC = () => {
   const handleAddAdmin = async (admin: AdminUser) => {
     try {
       await setDoc(doc(db, 'admins', admin.id), admin);
-      setAdminUsers(prev => [...prev, admin]);
+      setAdminUsers(prev => {
+        const next = [...prev, admin];
+        setCachedData(CACHE_KEYS.ADMINS, next);
+        return next;
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `admins/${admin.id}`);
     }
@@ -323,7 +593,11 @@ const App: React.FC = () => {
   const handleUpdateAdmin = async (admin: AdminUser) => {
     try {
       await setDoc(doc(db, 'admins', admin.id), admin);
-      setAdminUsers(prev => prev.map(a => a.id === admin.id ? admin : a));
+      setAdminUsers(prev => {
+        const next = prev.map(a => a.id === admin.id ? admin : a);
+        setCachedData(CACHE_KEYS.ADMINS, next);
+        return next;
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `admins/${admin.id}`);
     }
@@ -332,7 +606,11 @@ const App: React.FC = () => {
   const handleDeleteAdmin = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'admins', id));
-      setAdminUsers(prev => prev.filter(a => a.id !== id));
+      setAdminUsers(prev => {
+        const next = prev.filter(a => a.id !== id);
+        setCachedData(CACHE_KEYS.ADMINS, next);
+        return next;
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `admins/${id}`);
     }
@@ -340,6 +618,14 @@ const App: React.FC = () => {
 
   const handleCastVoteInSession = async (session: VotingSession, optionId: string) => {
     if (!currentStudent || !optionId) return;
+
+    // Checagem de Frequência Escolar do Aluno para a data da eleição
+    const sessionDate = session.date || new Date().toISOString().split('T')[0];
+    const attRecord = attendanceRecords.find(a => a.date === sessionDate);
+    if (attRecord && !attRecord.presentMatriculas.includes(currentStudent.matricula)) {
+      setError(`Voto bloqueado: Você consta como faltoso na chamada escolar de ${sessionDate.split('-').reverse().join('/')}. Apenas alunos presentes podem votar.`);
+      return;
+    }
 
     const alreadyVoted = schoolSelections.some(
       s => s.matricula === currentStudent.matricula && 
@@ -365,10 +651,46 @@ const App: React.FC = () => {
     try {
       const docId = `${newSelection.matricula}_${session.id}_${newSelection.timestamp.replace(/[:.]/g, '-')}`;
       await setDoc(doc(db, 'selections', docId), newSelection);
-      setSelections(prev => [...prev, newSelection]);
+      setSelections(prev => {
+        const next = [...prev, newSelection];
+        setCachedData(CACHE_KEYS.STUDENT_VOTES(currentStudent.matricula), next);
+        return next;
+      });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'selections');
-      setSelections(prev => [...prev, newSelection]);
+      setSelections(prev => {
+        const next = [...prev, newSelection];
+        setCachedData(CACHE_KEYS.STUDENT_VOTES(currentStudent.matricula), next);
+        return next;
+      });
+    }
+  };
+
+  const handleSaveAttendance = async (date: string, presentMatriculas: string[]) => {
+    const schoolId = currentSchoolId || 'escola-principal';
+    const recordId = `${date}_${schoolId}`;
+    const newRecord: AttendanceRecord = {
+      id: recordId,
+      date,
+      schoolId,
+      presentMatriculas,
+      updatedAt: new Date().toISOString()
+    };
+
+    // 1. Atualização Otimista local imediata + Cache com 0 leituras
+    setAttendanceRecords(prev => {
+      const filtered = prev.filter(r => !(r.date === date && (r.schoolId === schoolId || !r.schoolId)));
+      const updated = [newRecord, ...filtered];
+      setCachedData(CACHE_KEYS.ATTENDANCE, updated);
+      return updated;
+    });
+
+    // 2. Gravação no Firestore
+    try {
+      await setDoc(doc(db, 'attendance', recordId), newRecord);
+    } catch (err: any) {
+      console.error("Erro ao persistir frequência no Firestore:", err);
+      handleFirestoreError(err, OperationType.WRITE, `attendance/${recordId}`);
     }
   };
 
@@ -396,7 +718,11 @@ const App: React.FC = () => {
 
     try {
       await setDoc(doc(db, 'selections', `${newSelection.matricula}_${selectedCategory}_${newSelection.timestamp.replace(/[:.]/g, '-')}`), newSelection);
-      setSelections(prev => [...prev, newSelection]);
+      setSelections(prev => {
+        const next = [...prev, newSelection];
+        setCachedData(CACHE_KEYS.STUDENT_VOTES(currentStudent.matricula), next);
+        return next;
+      });
       setSelectedMealId(null);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'selections');
@@ -617,7 +943,18 @@ const App: React.FC = () => {
   }
 
   return (
-    <Layout>
+    <Layout
+      userRole={userRole}
+      isSyncing={isSyncing}
+      lastSyncTime={lastSync}
+      onSync={() => {
+        if (userRole === 'student' && currentStudent) {
+          loadStudentData(currentStudent, true);
+        } else if (userRole === 'admin' || userRole === 'master') {
+          loadAdminData(true);
+        }
+      }}
+    >
       <div className="max-w-7xl mx-auto space-y-8 animate-fadeIn pb-20">
         
         {/* Header with Role Info and Logout */}
@@ -675,6 +1012,9 @@ const App: React.FC = () => {
               onUpdateVotingSession={handleUpdateVotingSession}
               onDeleteVotingSession={handleDeleteVotingSession}
               students={schoolStudents}
+              attendanceRecords={attendanceRecords}
+              onSaveAttendance={handleSaveAttendance}
+              currentSchoolId={currentSchoolId}
             />
           ) : (
             <UserManagementDashboard 
@@ -709,6 +1049,7 @@ const App: React.FC = () => {
                 votingSessions={schoolVotingSessions.length > 0 ? schoolVotingSessions : votingSessions}
                 mealOptions={schoolMealOptions}
                 selections={schoolSelections}
+                attendanceRecords={attendanceRecords}
                 onCastVote={handleCastVoteInSession}
                 onLogout={logout}
               />
