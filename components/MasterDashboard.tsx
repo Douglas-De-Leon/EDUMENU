@@ -9,6 +9,8 @@ interface MasterDashboardProps {
   onAddAdmin: (admin: AdminUser) => void;
   onUpdateAdmin?: (admin: AdminUser) => void;
   onDeleteAdmin: (id: string) => void;
+  onSyncDatabase?: () => void;
+  isSyncing?: boolean;
 }
 
 export const MasterDashboard: React.FC<MasterDashboardProps> = ({ 
@@ -18,12 +20,17 @@ export const MasterDashboard: React.FC<MasterDashboardProps> = ({
   onDeleteSchool, 
   onAddAdmin, 
   onUpdateAdmin,
-  onDeleteAdmin 
+  onDeleteAdmin,
+  onSyncDatabase,
+  isSyncing = false
 }) => {
   const [newSchoolName, setNewSchoolName] = useState('');
   const [newAdmin, setNewAdmin] = useState<AdminUser>({ id: '', login: '', name: '', password: '', schoolId: '' });
   const [editingAdmin, setEditingAdmin] = useState<AdminUser | null>(null);
   const [activeTab, setActiveTab] = useState<'schools' | 'admins'>('schools');
+  const [schoolToDelete, setSchoolToDelete] = useState<string | null>(null);
+  const [adminToDelete, setAdminToDelete] = useState<string | null>(null);
+  const [adminError, setAdminError] = useState<string | null>(null);
 
   const handleAddSchool = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,10 +46,11 @@ export const MasterDashboard: React.FC<MasterDashboardProps> = ({
 
   const handleAddAdmin = (e: React.FormEvent) => {
     e.preventDefault();
+    setAdminError(null);
     if (!newAdmin.login || !newAdmin.name || !newAdmin.password || !newAdmin.schoolId) return;
     
     if (admins.some(a => a.login === newAdmin.login)) {
-      alert('Login já cadastrado!');
+      setAdminError('Login já cadastrado!');
       return;
     }
     
@@ -52,10 +60,11 @@ export const MasterDashboard: React.FC<MasterDashboardProps> = ({
 
   const handleUpdateAdminSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setAdminError(null);
     if (!editingAdmin || !editingAdmin.login || !editingAdmin.name || !editingAdmin.schoolId) return;
     
     if (admins.some(a => a.login === editingAdmin.login && a.id !== editingAdmin.id)) {
-      alert('Login já cadastrado para outro gestor!');
+      setAdminError('Login já cadastrado para outro gestor!');
       return;
     }
     
@@ -65,15 +74,25 @@ export const MasterDashboard: React.FC<MasterDashboardProps> = ({
     setEditingAdmin(null);
   };
 
-  const handleDeleteSchool = (id: string) => {
-    if (window.confirm('Atenção: Excluir uma escola não exclui os alunos e votos automaticamente neste MVP. Deseja realmente excluir esta escola?')) {
-      onDeleteSchool(id);
+  const confirmDeleteSchool = (id: string) => {
+    setSchoolToDelete(id);
+  };
+
+  const confirmDeleteAdmin = (id: string) => {
+    setAdminToDelete(id);
+  };
+
+  const executeDeleteSchool = () => {
+    if (schoolToDelete) {
+      onDeleteSchool(schoolToDelete);
+      setSchoolToDelete(null);
     }
   };
 
-  const handleDeleteAdmin = (id: string) => {
-    if (window.confirm('Deseja realmente excluir este gestor?')) {
-      onDeleteAdmin(id);
+  const executeDeleteAdmin = () => {
+    if (adminToDelete) {
+      onDeleteAdmin(adminToDelete);
+      setAdminToDelete(null);
     }
   };
 
@@ -148,7 +167,7 @@ export const MasterDashboard: React.FC<MasterDashboardProps> = ({
                       </p>
                     </div>
                     <button 
-                      onClick={() => handleDeleteSchool(school.id)}
+                      onClick={() => confirmDeleteSchool(school.id)}
                       className="ml-4 flex-shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50 w-10 h-10 flex items-center justify-center rounded-xl transition-colors"
                       title="Excluir Escola"
                     >
@@ -173,6 +192,13 @@ export const MasterDashboard: React.FC<MasterDashboardProps> = ({
               <i className="fas fa-user-plus text-indigo-500"></i>
               Cadastrar Novo Gestor
             </h3>
+
+            {adminError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-bold flex items-center gap-2">
+                <i className="fas fa-exclamation-circle"></i>
+                <span>{adminError}</span>
+              </div>
+            )}
             
             {schools.length === 0 ? (
               <div className="bg-amber-50 text-amber-800 p-4 rounded-xl text-sm border border-amber-200">
@@ -327,7 +353,7 @@ export const MasterDashboard: React.FC<MasterDashboardProps> = ({
                           <i className="fas fa-edit"></i>
                         </button>
                         <button 
-                          onClick={() => handleDeleteAdmin(admin.id)}
+                          onClick={() => confirmDeleteAdmin(admin.id)}
                           className="ml-2 flex-shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50 w-10 h-10 flex items-center justify-center rounded-xl transition-colors"
                           title="Excluir Gestor"
                         >
@@ -342,6 +368,72 @@ export const MasterDashboard: React.FC<MasterDashboardProps> = ({
                   Nenhum gestor cadastrado ainda.
                 </p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete School Confirmation Modal */}
+      {schoolToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-6">
+            <div className="w-14 h-14 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center text-2xl mx-auto">
+              <i className="fas fa-exclamation-triangle"></i>
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-black text-slate-800">Confirmar Exclusão de Escola</h3>
+              <p className="text-xs text-slate-500">
+                Tem certeza que deseja excluir esta escola? Essa ação removerá o registro da escola do banco de dados imediatamente.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setSchoolToDelete(null)}
+                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={executeDeleteSchool}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-red-600/20 transition-all"
+              >
+                Confirmar Exclusão
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Admin Confirmation Modal */}
+      {adminToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-6">
+            <div className="w-14 h-14 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center text-2xl mx-auto">
+              <i className="fas fa-user-times"></i>
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-black text-slate-800">Confirmar Exclusão de Gestor</h3>
+              <p className="text-xs text-slate-500">
+                Tem certeza que deseja excluir o acesso deste gestor escolar? Ele não poderá mais acessar o painel administrativo.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setAdminToDelete(null)}
+                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={executeDeleteAdmin}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-red-600/20 transition-all"
+              >
+                Confirmar Exclusão
+              </button>
             </div>
           </div>
         </div>

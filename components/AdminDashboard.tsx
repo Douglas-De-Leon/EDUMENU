@@ -22,6 +22,8 @@ interface AdminDashboardProps {
   attendanceRecords?: AttendanceRecord[];
   onSaveAttendance?: (date: string, presentMatriculas: string[]) => Promise<void> | void;
   currentSchoolId?: string | null;
+  onSyncDatabase?: () => void;
+  isSyncing?: boolean;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
@@ -37,7 +39,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   students,
   attendanceRecords = [],
   onSaveAttendance,
-  currentSchoolId
+  currentSchoolId,
+  onSyncDatabase,
+  isSyncing = false
 }) => {
   // Tabs for managing votings, options, tracking, attendance or viewing results
   const [activeTab, setActiveTab] = useState<'votings' | 'options' | 'tracking' | 'attendance' | 'analytics'>('votings');

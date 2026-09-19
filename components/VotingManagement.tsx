@@ -660,6 +660,42 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
         </section>
 
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {sessionToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-6">
+            <div className="w-14 h-14 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center text-2xl mx-auto">
+              <i className="fas fa-exclamation-triangle"></i>
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-black text-slate-800">Confirmar Exclusão de Votação</h3>
+              <p className="text-xs text-slate-500">
+                Tem certeza que deseja excluir esta sessão de votação? Essa ação removerá a sessão do banco de dados imediatamente.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setSessionToDelete(null)}
+                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteVotingSession(sessionToDelete);
+                  setSessionToDelete(null);
+                }}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-red-600/20 transition-all"
+              >
+                Confirmar Exclusão
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

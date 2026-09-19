@@ -764,15 +764,40 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
           ) : (
             /* BALLOT CANDIDATES LIST */
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-xs">
                 <div>
-                  <h4 className="text-lg font-black text-slate-800">Selecione uma Opção na Cédula</h4>
-                  <p className="text-xs text-slate-500">Clique na opção desejada e depois no botão "Confirmar Voto" no final da tela.</p>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-lg font-black text-slate-800">Selecione uma Opção na Cédula</h4>
+                    <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 inline-flex items-center gap-1">
+                      <i className="fas fa-check-circle text-emerald-600"></i> Presença Confirmada
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Clique na opção desejada e depois no botão "Confirmar Voto" para gravar na urna eletrônica.
+                  </p>
                 </div>
-                <span className="text-[11px] font-black text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-200">
-                  {currentSessionOptions.length} Opções Habilitadas
+                <span className="text-[11px] font-black text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-200 self-start sm:self-center">
+                  {currentSessionOptions.length} {currentSessionOptions.length === 1 ? 'Opção Disponível' : 'Opções Habilitadas'}
                 </span>
               </div>
+
+              {/* Single Option Notice - Enforces Manual Confirmation Rule */}
+              {currentSessionOptions.length === 1 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 sm:p-5 flex items-start gap-3.5 shadow-xs animate-fadeIn">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 text-lg shadow-sm">
+                    <i className="fas fa-hand-pointer"></i>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-xs font-black text-amber-950 uppercase tracking-wide flex items-center gap-1.5">
+                      <i className="fas fa-shield-alt text-amber-600"></i>
+                      Cédula com Opção Única de Escolha &bull; Confirmação Obrigatória
+                    </span>
+                    <p className="text-xs text-amber-900 leading-relaxed">
+                      Esta eleição possui <strong>apenas 1 opção</strong> de escolha. Mesmo com opção única, o sistema <strong>nunca vota automaticamente por você</strong>. Você deve clicar no cartão abaixo para selecioná-lo e, em seguida, clicar em <strong>"Confirmar Voto Nesta Eleição"</strong> no painel da urna.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {currentSessionOptions.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

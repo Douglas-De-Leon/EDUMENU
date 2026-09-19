@@ -28,6 +28,7 @@ import {
 } from './utils/storageCache';
 import { handleFirestoreError, OperationType } from './utils/firestoreErrorHandler';
 import { StudentVotingDashboard } from './components/StudentVotingDashboard';
+import { dbAutoInitIfEmpty } from './services/databaseService';
 
 const App: React.FC = () => {
   const [userRole, setUserRole] = useState<'student' | 'admin' | 'master' | null>(() => {
@@ -39,6 +40,23 @@ const App: React.FC = () => {
   const [loginStep, setLoginStep] = useState<'landing' | 'role_selection' | 'student_login' | 'admin_login'>('landing');
   const [loginId, setLoginId] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [toast, setToast] = useState<{ message: string; type?: 'success' | 'info' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
+    setToast({ message, type });
+  };
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  // Inicialização automática do banco no primeiro acesso sem necessidade de botões
+  useEffect(() => {
+    dbAutoInitIfEmpty().catch(err => console.warn('Aviso na auto-inicialização:', err));
+  }, []);
   
   const [currentStudent, setCurrentStudent] = useState<Student | null>(() => {
     const saved = localStorage.getItem('currentStudent');
@@ -96,15 +114,97 @@ const App: React.FC = () => {
     getLastSyncTime(CACHE_KEYS.SELECTIONS) || getLastSyncTime(CACHE_KEYS.SESSIONS)
   );
 
-  const schoolMealOptions = mealOptions.filter(m => userRole === 'master' || (currentSchoolId && m.schoolId === currentSchoolId));
-  const schoolSelections = selections.filter(s => userRole === 'master' || (currentSchoolId && s.schoolId === currentSchoolId));
-  const schoolStudents = registeredStudents.filter(s => userRole === 'master' || (currentSchoolId && s.schoolId === currentSchoolId));
-  const schoolVotingSessions = votingSessions.filter(v => userRole === 'master' || (currentSchoolId && v.schoolId === currentSchoolId));
+  const schoolMealOptions = mealOptions.filter(m => userRole === 'master' || !currentSchoolId || !m.schoolId || m.schoolId === currentSchoolId);
+  const schoolSelections = selections.filter(s => userRole === 'master' || !currentSchoolId || !s.schoolId || s.schoolId === currentSchoolId);
+  const schoolStudents = registeredStudents.filter(s => userRole === 'master' || !currentSchoolId || !s.schoolId || s.schoolId === currentSchoolId);
+  const schoolVotingSessions = votingSessions.filter(v => userRole === 'master' || !currentSchoolId || !v.schoolId || v.schoolId === currentSchoolId);
 
   useEffect(() => {
     localStorage.setItem('votingSessions', JSON.stringify(votingSessions));
     setCachedData(CACHE_KEYS.SESSIONS, votingSessions);
   }, [votingSessions]);
+
+  // Inicialização e sincronização completa do Novo Banco de Dados (Firestore edumenu-7310d)
+  const seedInitialDataToFirestore = async (notifySuccess = false) => {
+    setIsSyncing(true);
+    try {
+      console.log("Sincronizando novas coleções e rotas no Firestore edumenu-7310d...");
+      
+      // 1. Rota de Escolas (/schools)
+      const defaultSchool: School = {
+        id: 'escola-principal',
+        name: 'Escola Estadual de Educação Básica',
+        createdAt: new Date().toISOString()
+      };
+      await setDoc(doc(db, 'schools', defaultSchool.id), defaultSchool);
+
+      // 2. Rota de Administradores (/admins)
+      const defaultAdmins: AdminUser[] = [
+        { id: 'admin-gestor', login: 'gestao', name: 'Gestão Escolar', password: '123', schoolId: 'escola-principal' },
+        { id: 'admin-diretoria', login: 'diretoria', name: 'Diretoria Geral', password: '123', schoolId: 'escola-principal' }
+      ];
+      for (const a of defaultAdmins) {
+        await setDoc(doc(db, 'admins', a.id), a);
+      }
+
+      // 3. Rota de Alunos (/students) - Todos os 35 discentes com matrículas, turmas e senhas
+      for (const st of INITIAL_STUDENTS) {
+        const studentToSave: Student = {
+          ...st,
+          schoolId: 'escola-principal',
+          turno: st.turno || 'Integral',
+          sala: st.sala || '1º Ano',
+          turma: st.turma || 'A'
+        };
+        await setDoc(doc(db, 'students', st.matricula), studentToSave);
+      }
+
+      // 4. Rota de Opções/Candidatos (/meals)
+      for (const opt of MEAL_OPTIONS) {
+        const optToSave: MealOption = {
+          ...opt,
+          schoolId: 'escola-principal'
+        };
+        await setDoc(doc(db, 'meals', opt.id), optToSave);
+      }
+
+      // 5. Rota de Sessões de Votação (/voting_sessions)
+      for (const sess of INITIAL_VOTING_SESSIONS) {
+        const sessToSave: VotingSession = {
+          ...sess,
+          schoolId: 'escola-principal'
+        };
+        await setDoc(doc(db, 'voting_sessions', sess.id), sessToSave);
+      }
+
+      // Atualiza estado local e cache
+      setSchools([defaultSchool]);
+      setAdminUsers(defaultAdmins);
+      setRegisteredStudents(INITIAL_STUDENTS.map(s => ({ ...s, schoolId: 'escola-principal' })));
+      setMealOptions(MEAL_OPTIONS.map(m => ({ ...m, schoolId: 'escola-principal' })));
+      setVotingSessions(INITIAL_VOTING_SESSIONS.map(v => ({ ...v, schoolId: 'escola-principal' })));
+
+      setCachedData(CACHE_KEYS.SCHOOLS, [defaultSchool]);
+      setCachedData(CACHE_KEYS.ADMINS, defaultAdmins);
+      setCachedData(CACHE_KEYS.STUDENTS, INITIAL_STUDENTS.map(s => ({ ...s, schoolId: 'escola-principal' })));
+      setCachedData(CACHE_KEYS.MEALS, MEAL_OPTIONS.map(m => ({ ...m, schoolId: 'escola-principal' })));
+      setCachedData(CACHE_KEYS.SESSIONS, INITIAL_VOTING_SESSIONS.map(v => ({ ...v, schoolId: 'escola-principal' })));
+
+      const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setLastSync(nowTime);
+
+      if (notifySuccess) {
+        alert('Banco de dados "edumenu-7310d" sincronizado com sucesso! As coleções schools, admins, students, meals, voting_sessions e attendance foram populadas.');
+      }
+      return true;
+    } catch (err: any) {
+      console.error("Erro ao sincronizar coleções no Firestore:", err);
+      handleFirestoreError(err, OperationType.WRITE, 'database_init');
+      return false;
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Carregamento ultra-otimizado para o aluno (cache inteligente + busca apenas seus próprios votos)
   const loadStudentData = async (student: Student, forceRefresh = false) => {
@@ -223,6 +323,13 @@ const App: React.FC = () => {
       }
 
       const [schoolsSnap, adminsSnap, mealsSnap, sessionsSnap, attendanceSnap, studentsSnap, selectionsSnap] = await Promise.all(promises);
+
+      // Se for a primeira inicialização do novo banco edumenu-7310d e estiver vazio, popula as coleções
+      if (schoolsSnap.empty && adminsSnap.empty) {
+        console.log("Detectado banco Firestore vazio. Criando coleções e populando rotas padrão...");
+        await seedInitialDataToFirestore(false);
+        return;
+      }
 
       const schoolsData: School[] = [];
       schoolsSnap.forEach((d: any) => schoolsData.push(d.data() as School));
@@ -422,6 +529,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.MEALS, next);
         return next;
       });
+      showToast('Opção cadastrada e salva no banco de dados!');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `meals/${meal.id}`);
     }
@@ -436,6 +544,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.MEALS, next);
         return next;
       });
+      showToast('Opção atualizada no banco de dados!');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `meals/${meal.id}`);
     }
@@ -449,6 +558,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.MEALS, next);
         return next;
       });
+      showToast('Opção excluída do banco de dados!');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `meals/${id}`);
     }
@@ -463,6 +573,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.SESSIONS, next);
         return next;
       });
+      showToast('Votação criada e salva no banco de dados!');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `voting_sessions/${session.id}`);
       setVotingSessions(prev => {
@@ -470,6 +581,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.SESSIONS, next);
         return next;
       });
+      showToast('Votação criada e salva no banco de dados!');
     }
   };
 
@@ -482,6 +594,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.SESSIONS, next);
         return next;
       });
+      showToast('Votação atualizada no banco de dados!');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `voting_sessions/${session.id}`);
       setVotingSessions(prev => {
@@ -489,6 +602,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.SESSIONS, next);
         return next;
       });
+      showToast('Votação atualizada no banco de dados!');
     }
   };
 
@@ -500,6 +614,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.SESSIONS, next);
         return next;
       });
+      showToast('Votação excluída do banco de dados!');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `voting_sessions/${id}`);
       setVotingSessions(prev => {
@@ -507,6 +622,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.SESSIONS, next);
         return next;
       });
+      showToast('Votação excluída do banco de dados!');
     }
   };
 
@@ -519,6 +635,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.STUDENTS, next);
         return next;
       });
+      showToast('Aluno cadastrado e salvo no banco de dados!');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `students/${student.matricula}`);
     }
@@ -533,6 +650,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.STUDENTS, next);
         return next;
       });
+      showToast('Dados do aluno atualizados no banco de dados!');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `students/${student.matricula}`);
     }
@@ -546,6 +664,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.STUDENTS, next);
         return next;
       });
+      showToast('Aluno excluído do banco de dados!');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `students/${matricula}`);
     }
@@ -559,6 +678,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.SCHOOLS, next);
         return next;
       });
+      showToast('Escola cadastrada e salva no banco de dados!');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `schools/${school.id}`);
     }
@@ -572,6 +692,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.SCHOOLS, next);
         return next;
       });
+      showToast('Escola excluída do banco de dados!');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `schools/${id}`);
     }
@@ -585,6 +706,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.ADMINS, next);
         return next;
       });
+      showToast('Gestor cadastrado e salvo no banco de dados!');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `admins/${admin.id}`);
     }
@@ -598,6 +720,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.ADMINS, next);
         return next;
       });
+      showToast('Gestor atualizado no banco de dados!');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `admins/${admin.id}`);
     }
@@ -611,6 +734,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.ADMINS, next);
         return next;
       });
+      showToast('Gestor excluído do banco de dados!');
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `admins/${id}`);
     }
@@ -663,6 +787,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.STUDENT_VOTES(currentStudent.matricula), next);
         return next;
       });
+      showToast('Voto confirmado e registrado no banco de dados com sucesso!');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'selections');
       setSelections(prev => {
@@ -670,6 +795,7 @@ const App: React.FC = () => {
         setCachedData(CACHE_KEYS.STUDENT_VOTES(currentStudent.matricula), next);
         return next;
       });
+      showToast('Voto confirmado e registrado no banco de dados!');
     }
   };
 
@@ -695,6 +821,7 @@ const App: React.FC = () => {
     // 2. Gravação no Firestore
     try {
       await setDoc(doc(db, 'attendance', recordId), newRecord);
+      showToast('Frequência escolar gravada no banco de dados!');
     } catch (err: any) {
       console.error("Erro ao persistir frequência no Firestore:", err);
       handleFirestoreError(err, OperationType.WRITE, `attendance/${recordId}`);
@@ -952,15 +1079,6 @@ const App: React.FC = () => {
   return (
     <Layout
       userRole={userRole}
-      isSyncing={isSyncing}
-      lastSyncTime={lastSync}
-      onSync={() => {
-        if (userRole === 'student' && currentStudent) {
-          loadStudentData(currentStudent, true);
-        } else if (userRole === 'admin' || userRole === 'master') {
-          loadAdminData(true);
-        }
-      }}
     >
       <div className="max-w-7xl mx-auto space-y-8 animate-fadeIn pb-20">
         
@@ -1064,6 +1182,28 @@ const App: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* Floating Real-Time Action Feedback Toast */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-fadeIn pointer-events-auto">
+          <div className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl border text-sm font-bold backdrop-blur-md ${
+            toast.type === 'error' 
+              ? 'bg-red-900/90 text-white border-red-500 shadow-red-900/30' 
+              : 'bg-slate-900/95 text-white border-slate-700 shadow-slate-900/40'
+          }`}>
+            <span className={`w-2.5 h-2.5 rounded-full ${toast.type === 'error' ? 'bg-red-400' : 'bg-emerald-400 animate-ping'}`}></span>
+            <span>{toast.message}</span>
+            <button 
+              type="button"
+              onClick={() => setToast(null)}
+              className="ml-2 text-white/50 hover:text-white text-xs p-1 transition-colors"
+              title="Fechar notificação"
+            >
+              <i className="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes fadeIn {

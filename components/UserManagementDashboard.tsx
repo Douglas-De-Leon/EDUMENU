@@ -19,6 +19,7 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
   const [studentToDelete, setStudentToDelete] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const nameInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
@@ -34,10 +35,11 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
 
   const handleAddStudent = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     if (!newStudent.matricula || !newStudent.name || !newStudent.sala) return;
 
     if (students.some(s => s.matricula === newStudent.matricula)) {
-      alert('Matrícula já cadastrada!');
+      setFormError('Matrícula já cadastrada para outro aluno!');
       return;
     }
 
@@ -84,6 +86,13 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
             <i className={`fas ${editingStudent ? 'fa-edit text-amber-500' : 'fa-user-plus text-indigo-500'}`}></i>
             {editingStudent ? 'Editar Aluno' : 'Cadastrar Novo Aluno'}
           </h3>
+
+          {formError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-bold flex items-center gap-2">
+              <i className="fas fa-exclamation-circle"></i>
+              <span>{formError}</span>
+            </div>
+          )}
           
           <form onSubmit={editingStudent ? handleUpdateStudentSubmit : handleAddStudent} className="space-y-4">
             <div>
