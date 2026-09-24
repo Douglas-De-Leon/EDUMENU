@@ -7,6 +7,9 @@ interface StudentVotingDashboardProps {
   mealOptions: MealOption[];
   selections: Selection[];
   attendanceRecords?: AttendanceRecord[];
+  isSyncing?: boolean;
+  lastSyncTime?: string | null;
+  onRefresh?: () => Promise<void> | void;
   onCastVote: (session: VotingSession, optionId: string) => Promise<void> | void;
   onLogout: () => void;
 }
@@ -17,6 +20,9 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
   mealOptions,
   selections,
   attendanceRecords = [],
+  isSyncing = false,
+  lastSyncTime = null,
+  onRefresh,
   onCastVote,
   onLogout
 }) => {
@@ -277,6 +283,22 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span>
                 Urna Conectada
               </span>
+              <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-md border border-indigo-100 flex items-center gap-1.5">
+                <i className="fas fa-database text-[10px] text-indigo-500"></i>
+                Firestore: {lastSyncTime ? `Sincronizado (${lastSyncTime})` : 'Ao Vivo'}
+              </span>
+              {onRefresh && (
+                <button
+                  type="button"
+                  onClick={() => onRefresh()}
+                  disabled={isSyncing}
+                  className="text-[10px] font-black uppercase tracking-wider bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 px-2.5 py-0.5 rounded-md border border-slate-200 transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  title="Recarregar votações diretamente do banco de dados agora"
+                >
+                  <i className={`fas fa-sync-alt text-[10px] ${isSyncing ? 'fa-spin text-indigo-600' : ''}`}></i>
+                  <span>{isSyncing ? 'Sincronizando...' : 'Atualizar Votações'}</span>
+                </button>
+              )}
             </div>
             <h2 className="text-2xl font-black text-slate-900 mt-1">{currentStudent.name}</h2>
             <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-slate-500 font-semibold">
@@ -625,16 +647,28 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
               <p className="text-xs text-slate-500 max-w-sm mx-auto mb-4">
                 Nenhuma votação corresponde aos filtros selecionados. Tente ajustar os termos de busca ou selecionar "Todas as Categorias".
               </p>
-              <button
-                onClick={() => {
-                  setCategoryFilter('all');
-                  setStatusFilter('all');
-                  setSearchQuery('');
-                }}
-                className="px-4 py-2 bg-indigo-50 text-indigo-700 font-bold text-xs rounded-xl hover:bg-indigo-100 transition-colors"
-              >
-                Limpar Filtros
-              </button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button
+                  onClick={() => {
+                    setCategoryFilter('all');
+                    setStatusFilter('all');
+                    setSearchQuery('');
+                  }}
+                  className="px-4 py-2 bg-indigo-50 text-indigo-700 font-bold text-xs rounded-xl hover:bg-indigo-100 transition-colors"
+                >
+                  Limpar Filtros
+                </button>
+                {onRefresh && (
+                  <button
+                    onClick={() => onRefresh()}
+                    disabled={isSyncing}
+                    className="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-200 transition-colors flex items-center gap-1.5"
+                  >
+                    <i className={`fas fa-sync-alt ${isSyncing ? 'fa-spin text-indigo-600' : ''}`}></i>
+                    <span>{isSyncing ? 'Consultando...' : 'Sincronizar Banco de Dados'}</span>
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>

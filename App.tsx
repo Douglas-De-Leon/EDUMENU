@@ -18,7 +18,8 @@ import {
   getDocs, 
   query, 
   where, 
-  limit 
+  limit,
+  onSnapshot
 } from 'firebase/firestore';
 import { 
   getCachedData, 
@@ -120,19 +121,15 @@ const App: React.FC = () => {
     return getCachedData<Selection[]>(CACHE_KEYS.SELECTIONS) || [];
   });
   const [mealOptions, setMealOptions] = useState<MealOption[]>(() => {
-    return getCachedData<MealOption[]>(CACHE_KEYS.MEALS) || MEAL_OPTIONS;
+    return getCachedData<MealOption[]>(CACHE_KEYS.MEALS) || [];
   });
   const [votingSessions, setVotingSessions] = useState<VotingSession[]>(() => {
     const cached = getCachedData<VotingSession[]>(CACHE_KEYS.SESSIONS);
-    if (cached && Array.isArray(cached) && cached.length > 0) return cached;
-    const saved = localStorage.getItem('votingSessions');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch (e) {}
+    if (cached && Array.isArray(cached) && cached.length > 0) {
+      const clean = cached.filter(s => !s.id.startsWith('session-gremio-') && !s.id.startsWith('session-rep-') && !s.id.startsWith('session-alim-') && !s.id.startsWith('session-outros-'));
+      return clean;
     }
-    return INITIAL_VOTING_SESSIONS;
+    return [];
   });
   const [selectedCategory, setSelectedCategory] = useState<'Gremio' | 'Representante' | 'Alimentação' | 'Outros'>('Gremio');
   const [showSummary, setShowSummary] = useState(false);
@@ -144,15 +141,21 @@ const App: React.FC = () => {
     getLastSyncTime(CACHE_KEYS.SELECTIONS) || getLastSyncTime(CACHE_KEYS.SESSIONS)
   );
 
+  // Limpeza preventiva de dados mock obsoletos do localStorage do navegador
+  useEffect(() => {
+    try {
+      const rawSessions = localStorage.getItem('votingSessions');
+      if (rawSessions && (rawSessions.includes('session-gremio-2026') || rawSessions.includes('session-rep-2026') || rawSessions.includes('session-alim-2026'))) {
+        localStorage.removeItem('votingSessions');
+        localStorage.removeItem(CACHE_KEYS.SESSIONS);
+      }
+    } catch (e) {}
+  }, []);
+
   const schoolMealOptions = mealOptions.filter(m => userRole === 'master' || !currentSchoolId || !m.schoolId || m.schoolId === currentSchoolId);
   const schoolSelections = selections.filter(s => userRole === 'master' || !currentSchoolId || !s.schoolId || s.schoolId === currentSchoolId);
   const schoolStudents = registeredStudents.filter(s => userRole === 'master' || !currentSchoolId || !s.schoolId || s.schoolId === currentSchoolId);
   const schoolVotingSessions = votingSessions.filter(v => userRole === 'master' || !currentSchoolId || !v.schoolId || v.schoolId === currentSchoolId);
-
-  useEffect(() => {
-    localStorage.setItem('votingSessions', JSON.stringify(votingSessions));
-    setCachedData(CACHE_KEYS.SESSIONS, votingSessions);
-  }, [votingSessions]);
 
   // Inicialização e sincronização completa do Novo Banco de Dados (Firestore edumenu-7310d)
   const seedInitialDataToFirestore = async (notifySuccess = false) => {
@@ -236,75 +239,74 @@ const App: React.FC = () => {
     }
   };
 
-  // Carregamento ultra-otimizado para o aluno (cache inteligente + busca paralela com Promise.all)
+  // Carregamento e sincronização em tempo real para o aluno com o banco de dados Firestore
   const loadStudentData = async (student: Student, forceRefresh = false) => {
+    setIsSyncing(true);
     try {
-      let sessions = getCachedData<VotingSession[]>(CACHE_KEYS.SESSIONS, 20);
-      let meals = getCachedData<MealOption[]>(CACHE_KEYS.MEALS, 20);
-      let studentVotes = getCachedData<Selection[]>(CACHE_KEYS.STUDENT_VOTES(student.matricula), 15);
-      let cachedAtt = getCachedData<AttendanceRecord[]>(CACHE_KEYS.ATTENDANCE, 15);
+      // 1. Carrega dados válidos do cache imediatamente para renderizar a interface sem esperar
+      let cachedSessions = getCachedData<VotingSession[]>(CACHE_KEYS.SESSIONS, 5);
+      if (cachedSessions && Array.isArray(cachedSessions)) {
+        const clean = cachedSessions.filter(s => !s.id.startsWith('session-gremio-') && !s.id.startsWith('session-rep-') && !s.id.startsWith('session-alim-') && !s.id.startsWith('session-outros-'));
+        if (clean.length > 0) setVotingSessions(clean);
+      }
 
-      // Preenche o estado imediatamente com dados em cache para renderização instantânea (0ms)
-      if (sessions) setVotingSessions(sessions);
-      if (meals) setMealOptions(meals);
-      if (studentVotes) setSelections(studentVotes);
+      let cachedMeals = getCachedData<MealOption[]>(CACHE_KEYS.MEALS, 5);
+      if (cachedMeals && Array.isArray(cachedMeals) && cachedMeals.length > 0) {
+        setMealOptions(cachedMeals);
+      }
+
+      let cachedVotes = getCachedData<Selection[]>(CACHE_KEYS.STUDENT_VOTES(student.matricula), 5);
+      if (cachedVotes) setSelections(cachedVotes);
+
+      let cachedAtt = getCachedData<AttendanceRecord[]>(CACHE_KEYS.ATTENDANCE, 5);
       if (cachedAtt) setAttendanceRecords(cachedAtt);
 
-      // Busca tudo que estiver faltando de forma 100% paralela (1 único roundtrip simultâneo)
-      const tasks: { type: 'sessions' | 'meals' | 'votes' | 'attendance'; promise: Promise<any> }[] = [];
+      // 2. Busca SEMPRE todas as informações mais recentes diretamente do banco de dados Firestore
+      const [sessionsSnap, mealsSnap, votesSnap, attSnap] = await Promise.all([
+        getDocs(collection(db, 'voting_sessions')),
+        getDocs(collection(db, 'meals')),
+        getDocs(query(collection(db, 'selections'), where('matricula', '==', student.matricula))),
+        getDocs(collection(db, 'attendance'))
+      ]);
 
-      if (!sessions || forceRefresh) {
-        tasks.push({ type: 'sessions', promise: getDocs(collection(db, 'voting_sessions')) });
-      }
-      if (!meals || forceRefresh) {
-        tasks.push({ type: 'meals', promise: getDocs(collection(db, 'meals')) });
-      }
-      if (!studentVotes || forceRefresh) {
-        tasks.push({ type: 'votes', promise: getDocs(query(collection(db, 'selections'), where('matricula', '==', student.matricula))) });
-      }
-      if (!cachedAtt || forceRefresh) {
-        tasks.push({ type: 'attendance', promise: getDocs(collection(db, 'attendance')) });
-      }
+      const liveSessions: VotingSession[] = [];
+      sessionsSnap.forEach((d: any) => {
+        const s = d.data() as VotingSession;
+        // Descarta sessões antigas de mock se houver resquício
+        if (!s.id.startsWith('session-gremio-') && !s.id.startsWith('session-rep-') && !s.id.startsWith('session-alim-') && !s.id.startsWith('session-outros-')) {
+          liveSessions.push(s);
+        }
+      });
+      setVotingSessions(liveSessions);
+      setCachedData(CACHE_KEYS.SESSIONS, liveSessions);
 
-      if (tasks.length > 0) {
-        const results = await Promise.all(tasks.map(t => t.promise));
-        tasks.forEach((t, index) => {
-          const snap = results[index];
-          if (t.type === 'sessions') {
-            const list: VotingSession[] = [];
-            snap.forEach((d: any) => list.push(d.data() as VotingSession));
-            if (list.length > 0) {
-              setVotingSessions(list);
-              setCachedData(CACHE_KEYS.SESSIONS, list);
-            }
-          } else if (t.type === 'meals') {
-            const list: MealOption[] = [];
-            snap.forEach((d: any) => {
-              const m = d.data() as any;
-              list.push({
-                ...m,
-                category: (m.category === 'Padrao' ? 'Gremio' : m.category === 'Vegetariana' ? 'Alimentação' : m.category === 'Especial' ? 'Outros' : m.category) || 'Outros'
-              });
-            });
-            if (list.length > 0) {
-              setMealOptions(list);
-              setCachedData(CACHE_KEYS.MEALS, list);
-            }
-          } else if (t.type === 'votes') {
-            const list: Selection[] = [];
-            snap.forEach((d: any) => list.push(d.data() as Selection));
-            setSelections(list);
-            setCachedData(CACHE_KEYS.STUDENT_VOTES(student.matricula), list);
-          } else if (t.type === 'attendance') {
-            const list: AttendanceRecord[] = [];
-            snap.forEach((d: any) => list.push(d.data() as AttendanceRecord));
-            setAttendanceRecords(list);
-            setCachedData(CACHE_KEYS.ATTENDANCE, list);
-          }
+      const liveMeals: MealOption[] = [];
+      mealsSnap.forEach((d: any) => {
+        const m = d.data() as any;
+        liveMeals.push({
+          ...m,
+          category: (m.category === 'Padrao' ? 'Gremio' : m.category === 'Vegetariana' ? 'Alimentação' : m.category === 'Especial' ? 'Outros' : m.category) || 'Outros'
         });
-      }
+      });
+      setMealOptions(liveMeals);
+      setCachedData(CACHE_KEYS.MEALS, liveMeals);
+
+      const liveVotes: Selection[] = [];
+      votesSnap.forEach((d: any) => liveVotes.push(d.data() as Selection));
+      setSelections(liveVotes);
+      setCachedData(CACHE_KEYS.STUDENT_VOTES(student.matricula), liveVotes);
+
+      const liveAtt: AttendanceRecord[] = [];
+      attSnap.forEach((d: any) => liveAtt.push(d.data() as AttendanceRecord));
+      setAttendanceRecords(liveAtt);
+      setCachedData(CACHE_KEYS.ATTENDANCE, liveAtt);
+
+      const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setLastSync(nowTime);
     } catch (err) {
-      console.warn("Aviso ao carregar dados do aluno:", err);
+      console.warn("Aviso ao carregar dados do aluno do Firestore:", err);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -446,6 +448,46 @@ const App: React.FC = () => {
       loadAdminData();
     }
   }, []);
+
+  // Sincronização em Tempo Real (Realtime Listener) com o Firestore para votações e opções
+  useEffect(() => {
+    if (!userRole) return;
+
+    const unsubSessions = onSnapshot(collection(db, 'voting_sessions'), (snap) => {
+      const list: VotingSession[] = [];
+      snap.forEach(d => {
+        const s = d.data() as VotingSession;
+        if (!s.id.startsWith('session-gremio-') && !s.id.startsWith('session-rep-') && !s.id.startsWith('session-alim-') && !s.id.startsWith('session-outros-')) {
+          list.push(s);
+        }
+      });
+      setVotingSessions(list);
+      setCachedData(CACHE_KEYS.SESSIONS, list);
+      setLastSync(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    }, (err) => {
+      console.warn("Aviso no listener de sessões em tempo real:", err);
+    });
+
+    const unsubMeals = onSnapshot(collection(db, 'meals'), (snap) => {
+      const list: MealOption[] = [];
+      snap.forEach(d => {
+        const m = d.data() as any;
+        list.push({
+          ...m,
+          category: (m.category === 'Padrao' ? 'Gremio' : m.category === 'Vegetariana' ? 'Alimentação' : m.category === 'Especial' ? 'Outros' : m.category) || 'Outros'
+        });
+      });
+      setMealOptions(list);
+      setCachedData(CACHE_KEYS.MEALS, list);
+    }, (err) => {
+      console.warn("Aviso no listener de opções em tempo real:", err);
+    });
+
+    return () => {
+      unsubSessions();
+      unsubMeals();
+    };
+  }, [userRole]);
 
   // Pré-carrega a lista de alunos em segundo plano ao abrir a tela de login para que a validação seja instantânea
   useEffect(() => {
@@ -1273,10 +1315,13 @@ const App: React.FC = () => {
             ) : (
               <StudentVotingDashboard
                 currentStudent={currentStudent}
-                votingSessions={schoolVotingSessions.length > 0 ? schoolVotingSessions : votingSessions}
-                mealOptions={schoolMealOptions}
+                votingSessions={schoolVotingSessions}
+                mealOptions={mealOptions}
                 selections={schoolSelections}
                 attendanceRecords={attendanceRecords}
+                isSyncing={isSyncing}
+                lastSyncTime={lastSync}
+                onRefresh={() => currentStudent ? loadStudentData(currentStudent, true) : undefined}
                 onCastVote={handleCastVoteInSession}
                 onLogout={logout}
               />
