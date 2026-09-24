@@ -29,6 +29,7 @@ import {
 import { handleFirestoreError, OperationType } from './utils/firestoreErrorHandler';
 import { StudentVotingDashboard } from './components/StudentVotingDashboard';
 import { dbAutoInitIfEmpty } from './services/databaseService';
+import { testDatabaseConnection } from './firebase';
 
 const App: React.FC = () => {
   const [userRole, setUserRole] = useState<'student' | 'admin' | 'master' | null>(() => {
@@ -40,6 +41,9 @@ const App: React.FC = () => {
   const [loginStep, setLoginStep] = useState<'landing' | 'role_selection' | 'student_login' | 'admin_login'>('landing');
   const [loginId, setLoginId] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [dbLatency, setDbLatency] = useState<number | null>(null);
+  const [isTestingDb, setIsTestingDb] = useState(false);
   const [toast, setToast] = useState<{ message: string; type?: 'success' | 'info' | 'error' } | null>(null);
 
   const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
@@ -52,6 +56,32 @@ const App: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [toast]);
+
+  // Testa conexão com Firestore ao inicializar para aquecer a rota de rede
+  useEffect(() => {
+    testDatabaseConnection().then(res => {
+      if (res.success) {
+        setDbLatency(res.latencyMs);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const handleTestDatabase = async () => {
+    setIsTestingDb(true);
+    try {
+      const res = await testDatabaseConnection();
+      if (res.success) {
+        setDbLatency(res.latencyMs);
+        showToast(`Banco Firestore testado com sucesso! Resposta em ${res.latencyMs}ms`, 'success');
+      } else {
+        showToast(`Alerta no teste do banco: ${res.error}`, 'error');
+      }
+    } catch (e: any) {
+      showToast(`Erro ao testar banco: ${e.message}`, 'error');
+    } finally {
+      setIsTestingDb(false);
+    }
+  };
 
   // Inicialização automática do banco no primeiro acesso sem necessidade de botões
   useEffect(() => {
@@ -206,83 +236,85 @@ const App: React.FC = () => {
     }
   };
 
-  // Carregamento ultra-otimizado para o aluno (cache inteligente + busca apenas seus próprios votos)
+  // Carregamento ultra-otimizado para o aluno (cache inteligente + busca paralela com Promise.all)
   const loadStudentData = async (student: Student, forceRefresh = false) => {
     try {
-      // 1. Sessões de votação (usa cache de 20 minutos para 0 leituras repetidas)
       let sessions = getCachedData<VotingSession[]>(CACHE_KEYS.SESSIONS, 20);
-      if (!sessions || forceRefresh) {
-        const snap = await getDocs(collection(db, 'voting_sessions'));
-        const list: VotingSession[] = [];
-        snap.forEach(d => list.push(d.data() as VotingSession));
-        if (list.length > 0) {
-          sessions = list;
-          setVotingSessions(list);
-          setCachedData(CACHE_KEYS.SESSIONS, list);
-        }
-      } else {
-        setVotingSessions(sessions);
-      }
-
-      // 2. Opções e candidatos (usa cache de 20 minutos)
       let meals = getCachedData<MealOption[]>(CACHE_KEYS.MEALS, 20);
-      if (!meals || forceRefresh) {
-        const snap = await getDocs(collection(db, 'meals'));
-        const list: MealOption[] = [];
-        snap.forEach(d => {
-          const m = d.data() as any;
-          list.push({
-            ...m,
-            category: (m.category === 'Padrao' ? 'Gremio' : m.category === 'Vegetariana' ? 'Alimentação' : m.category === 'Especial' ? 'Outros' : m.category) || 'Outros'
-          });
-        });
-        if (list.length > 0) {
-          meals = list;
-          setMealOptions(list);
-          setCachedData(CACHE_KEYS.MEALS, list);
-        }
-      } else {
-        setMealOptions(meals);
-      }
-
-      // 3. Votos do aluno: carrega APENAS os votos deste aluno (where matricula == student.matricula)
-      // Evita baixar centenas ou milhares de votos de outros alunos da escola!
       let studentVotes = getCachedData<Selection[]>(CACHE_KEYS.STUDENT_VOTES(student.matricula), 15);
+      let cachedAtt = getCachedData<AttendanceRecord[]>(CACHE_KEYS.ATTENDANCE, 15);
+
+      // Preenche o estado imediatamente com dados em cache para renderização instantânea (0ms)
+      if (sessions) setVotingSessions(sessions);
+      if (meals) setMealOptions(meals);
+      if (studentVotes) setSelections(studentVotes);
+      if (cachedAtt) setAttendanceRecords(cachedAtt);
+
+      // Busca tudo que estiver faltando de forma 100% paralela (1 único roundtrip simultâneo)
+      const tasks: { type: 'sessions' | 'meals' | 'votes' | 'attendance'; promise: Promise<any> }[] = [];
+
+      if (!sessions || forceRefresh) {
+        tasks.push({ type: 'sessions', promise: getDocs(collection(db, 'voting_sessions')) });
+      }
+      if (!meals || forceRefresh) {
+        tasks.push({ type: 'meals', promise: getDocs(collection(db, 'meals')) });
+      }
       if (!studentVotes || forceRefresh) {
-        const q = query(collection(db, 'selections'), where('matricula', '==', student.matricula));
-        const snap = await getDocs(q);
-        const list: Selection[] = [];
-        snap.forEach(d => list.push(d.data() as Selection));
-        studentVotes = list;
-        setSelections(list);
-        setCachedData(CACHE_KEYS.STUDENT_VOTES(student.matricula), list);
-      } else {
-        setSelections(studentVotes);
+        tasks.push({ type: 'votes', promise: getDocs(query(collection(db, 'selections'), where('matricula', '==', student.matricula))) });
+      }
+      if (!cachedAtt || forceRefresh) {
+        tasks.push({ type: 'attendance', promise: getDocs(collection(db, 'attendance')) });
       }
 
-      // 4. Frequência escolar (cache de 15 minutos para manter 0 leituras extras)
-      let cachedAtt = getCachedData<AttendanceRecord[]>(CACHE_KEYS.ATTENDANCE, 15);
-      if (!cachedAtt || forceRefresh) {
-        try {
-          const attSnap = await getDocs(collection(db, 'attendance'));
-          const attList: AttendanceRecord[] = [];
-          attSnap.forEach(d => attList.push(d.data() as AttendanceRecord));
-          cachedAtt = attList;
-          setAttendanceRecords(attList);
-          setCachedData(CACHE_KEYS.ATTENDANCE, attList);
-        } catch (e) {}
-      } else {
-        setAttendanceRecords(cachedAtt);
+      if (tasks.length > 0) {
+        const results = await Promise.all(tasks.map(t => t.promise));
+        tasks.forEach((t, index) => {
+          const snap = results[index];
+          if (t.type === 'sessions') {
+            const list: VotingSession[] = [];
+            snap.forEach((d: any) => list.push(d.data() as VotingSession));
+            if (list.length > 0) {
+              setVotingSessions(list);
+              setCachedData(CACHE_KEYS.SESSIONS, list);
+            }
+          } else if (t.type === 'meals') {
+            const list: MealOption[] = [];
+            snap.forEach((d: any) => {
+              const m = d.data() as any;
+              list.push({
+                ...m,
+                category: (m.category === 'Padrao' ? 'Gremio' : m.category === 'Vegetariana' ? 'Alimentação' : m.category === 'Especial' ? 'Outros' : m.category) || 'Outros'
+              });
+            });
+            if (list.length > 0) {
+              setMealOptions(list);
+              setCachedData(CACHE_KEYS.MEALS, list);
+            }
+          } else if (t.type === 'votes') {
+            const list: Selection[] = [];
+            snap.forEach((d: any) => list.push(d.data() as Selection));
+            setSelections(list);
+            setCachedData(CACHE_KEYS.STUDENT_VOTES(student.matricula), list);
+          } else if (t.type === 'attendance') {
+            const list: AttendanceRecord[] = [];
+            snap.forEach((d: any) => list.push(d.data() as AttendanceRecord));
+            setAttendanceRecords(list);
+            setCachedData(CACHE_KEYS.ATTENDANCE, list);
+          }
+        });
       }
     } catch (err) {
       console.warn("Aviso ao carregar dados do aluno:", err);
     }
   };
 
-  // Carregamento para a gestão/admin com cache e escopo escolar
-  const loadAdminData = async (forceRefresh = false) => {
+  // Carregamento para a gestão/admin com cache e consultas paralelas otimizadas
+  const loadAdminData = async (forceRefresh = false, overrideSchoolId?: string, overrideRole?: string) => {
     setIsSyncing(true);
     try {
+      const activeRole = overrideRole || userRole;
+      const activeSchoolId = overrideSchoolId || currentSchoolId;
+
       const cachedSchools = getCachedData<School[]>(CACHE_KEYS.SCHOOLS, 30);
       const cachedAdmins = getCachedData<AdminUser[]>(CACHE_KEYS.ADMINS, 30);
       const cachedSessions = getCachedData<VotingSession[]>(CACHE_KEYS.SESSIONS, 20);
@@ -291,15 +323,17 @@ const App: React.FC = () => {
       const cachedSelections = getCachedData<Selection[]>(CACHE_KEYS.SELECTIONS, 10);
       const cachedAttendance = getCachedData<AttendanceRecord[]>(CACHE_KEYS.ATTENDANCE, 15);
 
+      // Preenche os dados locais imediatamente para não travar a interface
+      if (cachedSchools) setSchools(cachedSchools);
+      if (cachedAdmins) setAdminUsers(cachedAdmins);
+      if (cachedSessions) setVotingSessions(cachedSessions);
+      if (cachedMeals) setMealOptions(cachedMeals);
+      if (cachedStudents) setRegisteredStudents(cachedStudents);
+      if (cachedSelections) setSelections(cachedSelections);
+      if (cachedAttendance) setAttendanceRecords(cachedAttendance);
+
       // Se houver dados válidos em cache e não for atualização manual, não consome nenhuma leitura
       if (!forceRefresh && cachedSchools && cachedAdmins && cachedSessions && cachedMeals && cachedStudents && cachedSelections && cachedAttendance) {
-        setSchools(cachedSchools);
-        setAdminUsers(cachedAdmins);
-        setVotingSessions(cachedSessions);
-        setMealOptions(cachedMeals);
-        setRegisteredStudents(cachedStudents);
-        setSelections(cachedSelections);
-        setAttendanceRecords(cachedAttendance);
         setIsSyncing(false);
         setLastSync(getLastSyncTime(CACHE_KEYS.SELECTIONS) || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
         return;
@@ -314,9 +348,9 @@ const App: React.FC = () => {
       ];
 
       // Se for gestor escolar, filtra alunos e votos apenas da escola para economizar leituras
-      if (userRole === 'admin' && currentSchoolId) {
-        promises.push(getDocs(query(collection(db, 'students'), where('schoolId', '==', currentSchoolId))));
-        promises.push(getDocs(query(collection(db, 'selections'), where('schoolId', '==', currentSchoolId))));
+      if (activeRole === 'admin' && activeSchoolId) {
+        promises.push(getDocs(query(collection(db, 'students'), where('schoolId', '==', activeSchoolId))));
+        promises.push(getDocs(query(collection(db, 'selections'), where('schoolId', '==', activeSchoolId))));
       } else {
         promises.push(getDocs(collection(db, 'students')));
         promises.push(getDocs(collection(db, 'selections')));
@@ -398,14 +432,34 @@ const App: React.FC = () => {
     }
   };
 
-  // Executa busca apenas para usuários autenticados (NENHUMA leitura na Landing Page!)
+  // Carrega apenas no carregamento inicial da página (reload) caso o usuário já tenha sessão salva
   useEffect(() => {
-    if (userRole === 'student' && currentStudent) {
-      loadStudentData(currentStudent);
-    } else if (userRole === 'admin' || userRole === 'master') {
+    const savedRole = localStorage.getItem('userRole');
+    if (savedRole === 'student') {
+      const savedStudent = localStorage.getItem('currentStudent');
+      if (savedStudent) {
+        try {
+          loadStudentData(JSON.parse(savedStudent));
+        } catch (e) {}
+      }
+    } else if (savedRole === 'admin' || savedRole === 'master') {
       loadAdminData();
     }
-  }, [userRole]);
+  }, []);
+
+  // Pré-carrega a lista de alunos em segundo plano ao abrir a tela de login para que a validação seja instantânea
+  useEffect(() => {
+    if (loginStep === 'student_login' && registeredStudents.length <= INITIAL_STUDENTS.length) {
+      getDocs(collection(db, 'students')).then(snap => {
+        if (!snap.empty) {
+          const list: Student[] = [];
+          snap.forEach(d => list.push(d.data() as Student));
+          setRegisteredStudents(list);
+          setCachedData(CACHE_KEYS.STUDENTS, list);
+        }
+      }).catch(err => console.warn('Preload alunos:', err));
+    }
+  }, [loginStep]);
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -418,100 +472,106 @@ const App: React.FC = () => {
 
     const cleanId = loginId.trim();
     const cleanPass = loginPassword.trim();
+    setIsLoggingIn(true);
 
-    if (loginStep === 'student_login') {
-      // 1. Verifica no cache local/alunos pré-carregados (0 leituras no Firestore!)
-      let student = registeredStudents.find(s => s.matricula === cleanId && s.password === cleanPass);
+    try {
+      if (loginStep === 'student_login') {
+        // 1. Verifica no cache local/alunos pré-carregados (0 leituras no Firestore!)
+        let student = registeredStudents.find(s => s.matricula === cleanId && s.password === cleanPass);
 
-      // 2. Se não estiver no cache local, busca pontualmente APENAS o documento deste aluno no Firestore (1 leitura única!)
-      if (!student) {
-        try {
-          const docSnap = await getDoc(doc(db, 'students', cleanId));
-          if (docSnap.exists()) {
-            const data = docSnap.data() as Student;
-            if (data.password === cleanPass) {
-              student = {
-                ...data,
-                turno: data.turno || 'Integral',
-                sala: data.sala || '1º Ano',
-                turma: data.turma || 'A'
-              };
-              setRegisteredStudents(prev => {
-                const next = [...prev.filter(s => s.matricula !== cleanId), student!];
-                setCachedData(CACHE_KEYS.STUDENTS, next);
-                return next;
-              });
+        // 2. Se não estiver no cache local, busca pontualmente APENAS o documento deste aluno no Firestore (1 leitura única!)
+        if (!student) {
+          try {
+            const docSnap = await getDoc(doc(db, 'students', cleanId));
+            if (docSnap.exists()) {
+              const data = docSnap.data() as Student;
+              if (data.password === cleanPass) {
+                student = {
+                  ...data,
+                  turno: data.turno || 'Integral',
+                  sala: data.sala || '1º Ano',
+                  turma: data.turma || 'A'
+                };
+                setRegisteredStudents(prev => {
+                  const next = [...prev.filter(s => s.matricula !== cleanId), student!];
+                  setCachedData(CACHE_KEYS.STUDENTS, next);
+                  return next;
+                });
+              }
             }
+          } catch (err) {
+            console.error("Erro ao validar login do aluno:", err);
           }
-        } catch (err) {
-          console.error("Erro ao validar login do aluno:", err);
         }
-      }
 
-      if (student) {
-        setUserRole('student');
-        setCurrentStudent(student);
-        setView('student');
-        if (student.schoolId) {
-          setCurrentSchoolId(student.schoolId);
-          localStorage.setItem('currentSchoolId', student.schoolId);
+        if (student) {
+          setUserRole('student');
+          setCurrentStudent(student);
+          setView('student');
+          if (student.schoolId) {
+            setCurrentSchoolId(student.schoolId);
+            localStorage.setItem('currentSchoolId', student.schoolId);
+          }
+          localStorage.setItem('userRole', 'student');
+          localStorage.setItem('view', 'student');
+          localStorage.setItem('currentStudent', JSON.stringify(student));
+          // Carrega os dados do aluno em paralelo
+          await loadStudentData(student);
+        } else {
+          setError("Matrícula ou senha inválidas.");
         }
-        localStorage.setItem('userRole', 'student');
-        localStorage.setItem('view', 'student');
-        localStorage.setItem('currentStudent', JSON.stringify(student));
-        // Carrega apenas os dados relevantes para este aluno
-        loadStudentData(student);
-      } else {
-        setError("Matrícula ou senha inválidas.");
-      }
-    } else if (loginStep === 'admin_login') {
-      // Login Master (0 leituras no Firestore!)
-      if (cleanId === '84040513215' && cleanPass === 'admin123') {
-        setUserRole('master');
-        setView('master_admins');
-        localStorage.setItem('userRole', 'master');
-        localStorage.setItem('view', 'master_admins');
-        loadAdminData();
-        return;
-      }
+      } else if (loginStep === 'admin_login') {
+        // Login Master (0 leituras no Firestore!)
+        if (cleanId === '84040513215' && cleanPass === 'admin123') {
+          setUserRole('master');
+          setView('master_admins');
+          localStorage.setItem('userRole', 'master');
+          localStorage.setItem('view', 'master_admins');
+          await loadAdminData(false, undefined, 'master');
+          return;
+        }
 
-      // Verifica admins no cache
-      let admin = adminUsers.find(a => a.login === cleanId && a.password === cleanPass);
+        // Verifica admins no cache
+        let admin = adminUsers.find(a => a.login === cleanId && a.password === cleanPass);
 
-      // Se não encontrou no cache, faz busca pontual por login (1 leitura única!)
-      if (!admin) {
-        try {
-          const q = query(collection(db, 'admins'), where('login', '==', cleanId), limit(1));
-          const snap = await getDocs(q);
-          if (!snap.empty) {
-            const data = snap.docs[0].data() as AdminUser;
-            if (data.password === cleanPass) {
-              admin = data;
-              setAdminUsers(prev => {
-                const next = [...prev.filter(a => a.id !== admin!.id), admin!];
-                setCachedData(CACHE_KEYS.ADMINS, next);
-                return next;
-              });
+        // Se não encontrou no cache, faz busca pontual por login (1 leitura única!)
+        if (!admin) {
+          try {
+            const q = query(collection(db, 'admins'), where('login', '==', cleanId), limit(1));
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+              const data = snap.docs[0].data() as AdminUser;
+              if (data.password === cleanPass) {
+                admin = data;
+                setAdminUsers(prev => {
+                  const next = [...prev.filter(a => a.id !== admin!.id), admin!];
+                  setCachedData(CACHE_KEYS.ADMINS, next);
+                  return next;
+                });
+              }
             }
+          } catch (err) {
+            console.error("Erro ao validar login do admin:", err);
           }
-        } catch (err) {
-          console.error("Erro ao validar login do admin:", err);
         }
-      }
 
-      if (admin) {
-        setUserRole('admin');
-        setView('admin');
-        if (admin.schoolId) {
-          setCurrentSchoolId(admin.schoolId);
-          localStorage.setItem('currentSchoolId', admin.schoolId);
+        if (admin) {
+          setUserRole('admin');
+          setView('admin');
+          const schId = admin.schoolId || '';
+          if (schId) {
+            setCurrentSchoolId(schId);
+            localStorage.setItem('currentSchoolId', schId);
+          }
+          localStorage.setItem('userRole', 'admin');
+          localStorage.setItem('view', 'admin');
+          await loadAdminData(false, schId, 'admin');
+        } else {
+          setError("Login ou senha inválidos.");
         }
-        localStorage.setItem('userRole', 'admin');
-        localStorage.setItem('view', 'admin');
-        loadAdminData();
-      } else {
-        setError("Login ou senha inválidos.");
       }
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -973,6 +1033,7 @@ const App: React.FC = () => {
           )}
           
           {loginStep === 'role_selection' ? (
+            <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full max-w-4xl px-4">
               <button 
                 onClick={() => handleRoleSelect('student')}
@@ -1000,6 +1061,21 @@ const App: React.FC = () => {
                 </div>
               </button>
             </div>
+
+            <div className="flex flex-col items-center gap-2">
+              <button
+                type="button"
+                onClick={handleTestDatabase}
+                disabled={isTestingDb}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition-colors shadow-sm cursor-pointer"
+                title="Clique para testar a comunicação e medir a latência do Firestore"
+              >
+                <span className={`w-2.5 h-2.5 rounded-full ${isTestingDb ? 'bg-amber-500 animate-ping' : dbLatency ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+                <span>{isTestingDb ? 'Testando conexão com o banco...' : dbLatency ? `Banco de Dados Online (${dbLatency}ms)` : 'Testar Conexão com Banco de Dados'}</span>
+                <i className={`fas fa-sync-alt text-xs ${isTestingDb ? 'fa-spin' : ''}`}></i>
+              </button>
+            </div>
+          </>
           ) : (
             <div className="bg-white p-8 rounded-3xl shadow-2xl shadow-indigo-100 border border-slate-100 w-full max-w-md animate-fadeIn">
               <form onSubmit={handleLoginSubmit} className="space-y-6">
@@ -1022,8 +1098,9 @@ const App: React.FC = () => {
                       <input 
                         type="text" 
                         required
+                        disabled={isLoggingIn}
                         placeholder={loginStep === 'student_login' ? 'Ex: 2023001' : 'Seu login'}
-                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-lg font-medium"
+                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-lg font-medium disabled:opacity-60"
                         value={loginId}
                         onChange={(e) => setLoginId(e.target.value)}
                       />
@@ -1037,8 +1114,9 @@ const App: React.FC = () => {
                       <input 
                         type="password" 
                         required
+                        disabled={isLoggingIn}
                         placeholder="***"
-                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-lg font-medium"
+                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-lg font-medium disabled:opacity-60"
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
                       />
@@ -1056,19 +1134,43 @@ const App: React.FC = () => {
                 <div className="space-y-3 pt-2">
                   <button 
                     type="submit"
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-6 rounded-2xl shadow-lg shadow-indigo-200 transition-all active:scale-95 text-lg"
+                    disabled={isLoggingIn}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold py-4 px-6 rounded-2xl shadow-lg shadow-indigo-200 transition-all active:scale-95 text-lg flex items-center justify-center gap-3"
                   >
-                    Entrar
+                    {isLoggingIn ? (
+                      <>
+                        <i className="fas fa-circle-notch fa-spin text-xl"></i>
+                        <span>Entrando no sistema...</span>
+                      </>
+                    ) : (
+                      <span>Entrar</span>
+                    )}
                   </button>
                   <button 
                     type="button"
+                    disabled={isLoggingIn}
                     onClick={() => setLoginStep('role_selection')}
-                    className="w-full bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold py-4 px-6 rounded-2xl transition-all text-sm"
+                    className="w-full bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold py-4 px-6 rounded-2xl transition-all text-sm disabled:opacity-50"
                   >
                     Voltar
                   </button>
                 </div>
               </form>
+
+              {/* Diagnóstico em tempo real da velocidade do Banco de Dados */}
+              <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={handleTestDatabase}
+                  disabled={isTestingDb}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 transition-colors shadow-2xs cursor-pointer"
+                  title="Clique para medir a velocidade de resposta do Firestore agora"
+                >
+                  <span className={`w-2 h-2 rounded-full ${isTestingDb ? 'bg-amber-500 animate-ping' : dbLatency ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+                  <span>{isTestingDb ? 'Testando conexão...' : dbLatency ? `Banco Firestore: ${dbLatency}ms (Online)` : 'Testar Conexão com Banco'}</span>
+                  <i className={`fas fa-sync-alt text-[10px] ${isTestingDb ? 'fa-spin' : ''}`}></i>
+                </button>
+              </div>
             </div>
           )}
         </div>

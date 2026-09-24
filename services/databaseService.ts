@@ -171,6 +171,11 @@ export async function dbFetchAllData(): Promise<AllDatabaseData> {
  * de forma transparente, sem exibir botões ou exigir cliques do usuário.
  */
 export async function dbAutoInitIfEmpty(): Promise<boolean> {
+  // Evita re-executar consultas de inicialização caso o banco já tenha sido verificado nesta sessão do navegador
+  if (typeof window !== 'undefined' && localStorage.getItem('edumenu_db_verified') === 'true') {
+    return false;
+  }
+
   try {
     const schoolsSnap = await getDocs(collection(db, 'schools'));
     const adminsSnap = await getDocs(collection(db, 'admins'));
@@ -223,7 +228,14 @@ export async function dbAutoInitIfEmpty(): Promise<boolean> {
       }
 
       console.log('Script de gravação inicial concluído com sucesso.');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('edumenu_db_verified', 'true');
+      }
       return true;
+    }
+    
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('edumenu_db_verified', 'true');
     }
     return false;
   } catch (err) {
