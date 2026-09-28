@@ -32,6 +32,17 @@ import { StudentVotingDashboard } from './components/StudentVotingDashboard';
 import { dbAutoInitIfEmpty } from './services/databaseService';
 import { testDatabaseConnection } from './firebase';
 
+function dedupeByKey<T>(items: T[], key: keyof T): T[] {
+  if (!Array.isArray(items)) return [];
+  const map = new Map<any, T>();
+  for (const item of items) {
+    if (item && item[key] !== undefined) {
+      map.set(item[key], item);
+    }
+  }
+  return Array.from(map.values());
+}
+
 const App: React.FC = () => {
   const [userRole, setUserRole] = useState<'student' | 'admin' | 'master' | null>(() => {
     return (localStorage.getItem('userRole') as any) || null;
@@ -94,19 +105,19 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : null;
   });
   const [registeredStudents, setRegisteredStudents] = useState<Student[]>(() => {
-    return getCachedData<Student[]>(CACHE_KEYS.STUDENTS) || INITIAL_STUDENTS;
+    return dedupeByKey(getCachedData<Student[]>(CACHE_KEYS.STUDENTS) || INITIAL_STUDENTS, 'matricula');
   });
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>(() => {
-    return getCachedData<AdminUser[]>(CACHE_KEYS.ADMINS) || [];
+    return dedupeByKey(getCachedData<AdminUser[]>(CACHE_KEYS.ADMINS) || [], 'id');
   });
   const [schools, setSchools] = useState<School[]>(() => {
-    return getCachedData<School[]>(CACHE_KEYS.SCHOOLS) || [];
+    return dedupeByKey(getCachedData<School[]>(CACHE_KEYS.SCHOOLS) || [], 'id');
   });
   const [currentSchoolId, setCurrentSchoolId] = useState<string | null>(() => {
     return localStorage.getItem('currentSchoolId') || null;
   });
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(() => {
-    return getCachedData<AttendanceRecord[]>(CACHE_KEYS.ATTENDANCE) || [];
+    return dedupeByKey(getCachedData<AttendanceRecord[]>(CACHE_KEYS.ATTENDANCE) || [], 'id');
   });
   const [selections, setSelections] = useState<Selection[]>(() => {
     const savedRole = localStorage.getItem('userRole');
@@ -121,13 +132,13 @@ const App: React.FC = () => {
     return getCachedData<Selection[]>(CACHE_KEYS.SELECTIONS) || [];
   });
   const [mealOptions, setMealOptions] = useState<MealOption[]>(() => {
-    return getCachedData<MealOption[]>(CACHE_KEYS.MEALS) || [];
+    return dedupeByKey(getCachedData<MealOption[]>(CACHE_KEYS.MEALS) || [], 'id');
   });
   const [votingSessions, setVotingSessions] = useState<VotingSession[]>(() => {
     const cached = getCachedData<VotingSession[]>(CACHE_KEYS.SESSIONS);
     if (cached && Array.isArray(cached) && cached.length > 0) {
       const clean = cached.filter(s => !s.id.startsWith('session-gremio-') && !s.id.startsWith('session-rep-') && !s.id.startsWith('session-alim-') && !s.id.startsWith('session-outros-'));
-      return clean;
+      return dedupeByKey(clean, 'id');
     }
     return [];
   });
@@ -152,10 +163,10 @@ const App: React.FC = () => {
     } catch (e) {}
   }, []);
 
-  const schoolMealOptions = mealOptions.filter(m => userRole === 'master' || !currentSchoolId || !m.schoolId || m.schoolId === currentSchoolId);
+  const schoolMealOptions = dedupeByKey(mealOptions.filter(m => userRole === 'master' || !currentSchoolId || !m.schoolId || m.schoolId === currentSchoolId), 'id');
   const schoolSelections = selections.filter(s => userRole === 'master' || !currentSchoolId || !s.schoolId || s.schoolId === currentSchoolId);
-  const schoolStudents = registeredStudents.filter(s => userRole === 'master' || !currentSchoolId || !s.schoolId || s.schoolId === currentSchoolId);
-  const schoolVotingSessions = votingSessions.filter(v => userRole === 'master' || !currentSchoolId || !v.schoolId || v.schoolId === currentSchoolId);
+  const schoolStudents = dedupeByKey(registeredStudents.filter(s => userRole === 'master' || !currentSchoolId || !s.schoolId || s.schoolId === currentSchoolId), 'matricula');
+  const schoolVotingSessions = dedupeByKey(votingSessions.filter(v => userRole === 'master' || !currentSchoolId || !v.schoolId || v.schoolId === currentSchoolId), 'id');
 
   // Inicialização e sincronização completa do Novo Banco de Dados (Firestore edumenu-7310d)
   const seedInitialDataToFirestore = async (notifySuccess = false) => {
@@ -246,20 +257,20 @@ const App: React.FC = () => {
       // 1. Carrega dados válidos do cache imediatamente para renderizar a interface sem esperar
       let cachedSessions = getCachedData<VotingSession[]>(CACHE_KEYS.SESSIONS, 5);
       if (cachedSessions && Array.isArray(cachedSessions)) {
-        const clean = cachedSessions.filter(s => !s.id.startsWith('session-gremio-') && !s.id.startsWith('session-rep-') && !s.id.startsWith('session-alim-') && !s.id.startsWith('session-outros-'));
+        const clean = dedupeByKey(cachedSessions.filter(s => !s.id.startsWith('session-gremio-') && !s.id.startsWith('session-rep-') && !s.id.startsWith('session-alim-') && !s.id.startsWith('session-outros-')), 'id');
         if (clean.length > 0) setVotingSessions(clean);
       }
 
       let cachedMeals = getCachedData<MealOption[]>(CACHE_KEYS.MEALS, 5);
       if (cachedMeals && Array.isArray(cachedMeals) && cachedMeals.length > 0) {
-        setMealOptions(cachedMeals);
+        setMealOptions(dedupeByKey(cachedMeals, 'id'));
       }
 
       let cachedVotes = getCachedData<Selection[]>(CACHE_KEYS.STUDENT_VOTES(student.matricula), 5);
       if (cachedVotes) setSelections(cachedVotes);
 
       let cachedAtt = getCachedData<AttendanceRecord[]>(CACHE_KEYS.ATTENDANCE, 5);
-      if (cachedAtt) setAttendanceRecords(cachedAtt);
+      if (cachedAtt) setAttendanceRecords(dedupeByKey(cachedAtt, 'id'));
 
       // 2. Busca SEMPRE todas as informações mais recentes diretamente do banco de dados Firestore
       const [sessionsSnap, mealsSnap, votesSnap, attSnap] = await Promise.all([
@@ -274,11 +285,15 @@ const App: React.FC = () => {
         const s = d.data() as VotingSession;
         // Descarta sessões antigas de mock se houver resquício
         if (!s.id.startsWith('session-gremio-') && !s.id.startsWith('session-rep-') && !s.id.startsWith('session-alim-') && !s.id.startsWith('session-outros-')) {
-          liveSessions.push(s);
+          liveSessions.push({
+            ...s,
+            optionIds: Array.isArray(s.optionIds) ? Array.from(new Set(s.optionIds)) : []
+          });
         }
       });
-      setVotingSessions(liveSessions);
-      setCachedData(CACHE_KEYS.SESSIONS, liveSessions);
+      const uniqueLiveSessions = dedupeByKey(liveSessions, 'id');
+      setVotingSessions(uniqueLiveSessions);
+      setCachedData(CACHE_KEYS.SESSIONS, uniqueLiveSessions);
 
       const liveMeals: MealOption[] = [];
       mealsSnap.forEach((d: any) => {
@@ -288,8 +303,9 @@ const App: React.FC = () => {
           category: (m.category === 'Padrao' ? 'Gremio' : m.category === 'Vegetariana' ? 'Alimentação' : m.category === 'Especial' ? 'Outros' : m.category) || 'Outros'
         });
       });
-      setMealOptions(liveMeals);
-      setCachedData(CACHE_KEYS.MEALS, liveMeals);
+      const uniqueLiveMeals = dedupeByKey(liveMeals, 'id');
+      setMealOptions(uniqueLiveMeals);
+      setCachedData(CACHE_KEYS.MEALS, uniqueLiveMeals);
 
       const liveVotes: Selection[] = [];
       votesSnap.forEach((d: any) => liveVotes.push(d.data() as Selection));
@@ -326,13 +342,13 @@ const App: React.FC = () => {
       const cachedAttendance = getCachedData<AttendanceRecord[]>(CACHE_KEYS.ATTENDANCE, 15);
 
       // Preenche os dados locais imediatamente para não travar a interface
-      if (cachedSchools) setSchools(cachedSchools);
-      if (cachedAdmins) setAdminUsers(cachedAdmins);
-      if (cachedSessions) setVotingSessions(cachedSessions);
-      if (cachedMeals) setMealOptions(cachedMeals);
-      if (cachedStudents) setRegisteredStudents(cachedStudents);
+      if (cachedSchools) setSchools(dedupeByKey(cachedSchools, 'id'));
+      if (cachedAdmins) setAdminUsers(dedupeByKey(cachedAdmins, 'id'));
+      if (cachedSessions) setVotingSessions(dedupeByKey(cachedSessions, 'id'));
+      if (cachedMeals) setMealOptions(dedupeByKey(cachedMeals, 'id'));
+      if (cachedStudents) setRegisteredStudents(dedupeByKey(cachedStudents, 'matricula'));
       if (cachedSelections) setSelections(cachedSelections);
-      if (cachedAttendance) setAttendanceRecords(cachedAttendance);
+      if (cachedAttendance) setAttendanceRecords(dedupeByKey(cachedAttendance, 'id'));
 
       // Se houver dados válidos em cache e não for atualização manual, não consome nenhuma leitura
       if (!forceRefresh && cachedSchools && cachedAdmins && cachedSessions && cachedMeals && cachedStudents && cachedSelections && cachedAttendance) {
@@ -391,15 +407,23 @@ const App: React.FC = () => {
         });
       });
       if (mealsData.length > 0) {
-        setMealOptions(mealsData);
-        setCachedData(CACHE_KEYS.MEALS, mealsData);
+        const uniqueMeals = dedupeByKey(mealsData, 'id');
+        setMealOptions(uniqueMeals);
+        setCachedData(CACHE_KEYS.MEALS, uniqueMeals);
       }
 
       const sessionsData: VotingSession[] = [];
-      sessionsSnap.forEach((d: any) => sessionsData.push(d.data() as VotingSession));
+      sessionsSnap.forEach((d: any) => {
+        const s = d.data() as VotingSession;
+        sessionsData.push({
+          ...s,
+          optionIds: Array.isArray(s.optionIds) ? Array.from(new Set(s.optionIds)) : []
+        });
+      });
       if (sessionsData.length > 0) {
-        setVotingSessions(sessionsData);
-        setCachedData(CACHE_KEYS.SESSIONS, sessionsData);
+        const uniqueSessions = dedupeByKey(sessionsData, 'id');
+        setVotingSessions(uniqueSessions);
+        setCachedData(CACHE_KEYS.SESSIONS, uniqueSessions);
       }
 
       const studentsData: Student[] = [];
@@ -413,8 +437,9 @@ const App: React.FC = () => {
         });
       });
       if (studentsData.length > 0) {
-        setRegisteredStudents(studentsData);
-        setCachedData(CACHE_KEYS.STUDENTS, studentsData);
+        const uniqueStudents = dedupeByKey(studentsData, 'matricula');
+        setRegisteredStudents(uniqueStudents);
+        setCachedData(CACHE_KEYS.STUDENTS, uniqueStudents);
       }
 
       const selectionsData: Selection[] = [];
@@ -458,11 +483,15 @@ const App: React.FC = () => {
       snap.forEach(d => {
         const s = d.data() as VotingSession;
         if (!s.id.startsWith('session-gremio-') && !s.id.startsWith('session-rep-') && !s.id.startsWith('session-alim-') && !s.id.startsWith('session-outros-')) {
-          list.push(s);
+          list.push({
+            ...s,
+            optionIds: Array.isArray(s.optionIds) ? Array.from(new Set(s.optionIds)) : []
+          });
         }
       });
-      setVotingSessions(list);
-      setCachedData(CACHE_KEYS.SESSIONS, list);
+      const uniqueList = dedupeByKey(list, 'id');
+      setVotingSessions(uniqueList);
+      setCachedData(CACHE_KEYS.SESSIONS, uniqueList);
       setLastSync(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     }, (err) => {
       console.warn("Aviso no listener de sessões em tempo real:", err);
@@ -477,8 +506,9 @@ const App: React.FC = () => {
           category: (m.category === 'Padrao' ? 'Gremio' : m.category === 'Vegetariana' ? 'Alimentação' : m.category === 'Especial' ? 'Outros' : m.category) || 'Outros'
         });
       });
-      setMealOptions(list);
-      setCachedData(CACHE_KEYS.MEALS, list);
+      const uniqueList = dedupeByKey(list, 'id');
+      setMealOptions(uniqueList);
+      setCachedData(CACHE_KEYS.MEALS, uniqueList);
     }, (err) => {
       console.warn("Aviso no listener de opções em tempo real:", err);
     });
@@ -627,7 +657,7 @@ const App: React.FC = () => {
     try {
       await setDoc(doc(db, 'meals', meal.id), mealToSave);
       setMealOptions(prev => {
-        const next = [...prev, mealToSave];
+        const next = dedupeByKey([...prev.filter(m => m.id !== mealToSave.id), mealToSave], 'id');
         setCachedData(CACHE_KEYS.MEALS, next);
         return next;
       });
@@ -642,7 +672,7 @@ const App: React.FC = () => {
     try {
       await setDoc(doc(db, 'meals', meal.id), mealToSave);
       setMealOptions(prev => {
-        const next = prev.map(m => m.id === meal.id ? mealToSave : m);
+        const next = dedupeByKey(prev.map(m => m.id === meal.id ? mealToSave : m), 'id');
         setCachedData(CACHE_KEYS.MEALS, next);
         return next;
       });
@@ -667,11 +697,15 @@ const App: React.FC = () => {
   };
 
   const handleAddVotingSession = async (session: VotingSession) => {
-    const sessionToSave = { ...session, schoolId: currentSchoolId || session.schoolId || '' };
+    const sessionToSave = {
+      ...session,
+      optionIds: Array.isArray(session.optionIds) ? Array.from(new Set(session.optionIds)) : [],
+      schoolId: currentSchoolId || session.schoolId || ''
+    };
     try {
       await setDoc(doc(db, 'voting_sessions', session.id), sessionToSave);
       setVotingSessions(prev => {
-        const next = [sessionToSave, ...prev];
+        const next = dedupeByKey([sessionToSave, ...prev.filter(s => s.id !== sessionToSave.id)], 'id');
         setCachedData(CACHE_KEYS.SESSIONS, next);
         return next;
       });
@@ -679,7 +713,7 @@ const App: React.FC = () => {
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `voting_sessions/${session.id}`);
       setVotingSessions(prev => {
-        const next = [sessionToSave, ...prev];
+        const next = dedupeByKey([sessionToSave, ...prev.filter(s => s.id !== sessionToSave.id)], 'id');
         setCachedData(CACHE_KEYS.SESSIONS, next);
         return next;
       });
@@ -688,11 +722,15 @@ const App: React.FC = () => {
   };
 
   const handleUpdateVotingSession = async (session: VotingSession) => {
-    const sessionToSave = { ...session, schoolId: currentSchoolId || session.schoolId || '' };
+    const sessionToSave = {
+      ...session,
+      optionIds: Array.isArray(session.optionIds) ? Array.from(new Set(session.optionIds)) : [],
+      schoolId: currentSchoolId || session.schoolId || ''
+    };
     try {
       await setDoc(doc(db, 'voting_sessions', session.id), sessionToSave);
       setVotingSessions(prev => {
-        const next = prev.map(s => s.id === session.id ? sessionToSave : s);
+        const next = dedupeByKey(prev.map(s => s.id === session.id ? sessionToSave : s), 'id');
         setCachedData(CACHE_KEYS.SESSIONS, next);
         return next;
       });
@@ -700,7 +738,7 @@ const App: React.FC = () => {
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `voting_sessions/${session.id}`);
       setVotingSessions(prev => {
-        const next = prev.map(s => s.id === session.id ? sessionToSave : s);
+        const next = dedupeByKey(prev.map(s => s.id === session.id ? sessionToSave : s), 'id');
         setCachedData(CACHE_KEYS.SESSIONS, next);
         return next;
       });
@@ -733,7 +771,7 @@ const App: React.FC = () => {
     try {
       await setDoc(doc(db, 'students', student.matricula), studentToSave);
       setRegisteredStudents(prev => {
-        const next = [...prev, studentToSave];
+        const next = dedupeByKey([...prev.filter(s => s.matricula !== studentToSave.matricula), studentToSave], 'matricula');
         setCachedData(CACHE_KEYS.STUDENTS, next);
         return next;
       });
@@ -776,7 +814,7 @@ const App: React.FC = () => {
     try {
       await setDoc(doc(db, 'schools', school.id), school);
       setSchools(prev => {
-        const next = [...prev, school];
+        const next = dedupeByKey([...prev.filter(s => s.id !== school.id), school], 'id');
         setCachedData(CACHE_KEYS.SCHOOLS, next);
         return next;
       });
@@ -804,7 +842,7 @@ const App: React.FC = () => {
     try {
       await setDoc(doc(db, 'admins', admin.id), admin);
       setAdminUsers(prev => {
-        const next = [...prev, admin];
+        const next = dedupeByKey([...prev.filter(a => a.id !== admin.id), admin], 'id');
         setCachedData(CACHE_KEYS.ADMINS, next);
         return next;
       });

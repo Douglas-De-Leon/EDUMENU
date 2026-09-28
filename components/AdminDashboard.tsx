@@ -270,7 +270,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (!newMeal.name || !newMeal.description) return;
     
     const mealToAdd: MealOption = {
-      id: 'opt_' + Date.now().toString(),
+      id: 'opt_' + Date.now().toString() + '_' + Math.random().toString(36).substring(2, 7),
       name: newMeal.name,
       description: newMeal.description,
       category: newMeal.category as any,
