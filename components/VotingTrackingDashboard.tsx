@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { Selection, MealOption, Student, VotingSession, AttendanceRecord } from '../types';
-import { RealtimeVotingCharts } from './RealtimeVotingCharts';
 
 interface VotingTrackingDashboardProps {
   selections: Selection[];
@@ -8,9 +7,6 @@ interface VotingTrackingDashboardProps {
   votingSessions?: VotingSession[];
   students: Student[];
   attendanceRecords?: AttendanceRecord[];
-  lastSync?: string | null;
-  onRefresh?: () => void;
-  isSyncing?: boolean;
 }
 
 export const VotingTrackingDashboard: React.FC<VotingTrackingDashboardProps> = ({
@@ -18,10 +14,7 @@ export const VotingTrackingDashboard: React.FC<VotingTrackingDashboardProps> = (
   mealOptions,
   votingSessions = [],
   students,
-  attendanceRecords = [],
-  lastSync,
-  onRefresh,
-  isSyncing = false
+  attendanceRecords = []
 }) => {
   // Today's date string YYYY-MM-DD
   const getTodayDateStr = () => {
@@ -334,20 +327,6 @@ export const VotingTrackingDashboard: React.FC<VotingTrackingDashboardProps> = (
           ))}
         </div>
       </div>
-
-      {/* ========================================================= */}
-      {/* SEÇÃO 1.5: VISUALIZAÇÃO GRÁFICA RECHARTS EM TEMPO REAL    */}
-      {/* ========================================================= */}
-      <RealtimeVotingCharts
-        selections={selections}
-        mealOptions={mealOptions}
-        votingSessions={votingSessions}
-        students={students}
-        attendanceRecords={attendanceRecords}
-        lastSync={lastSync}
-        onRefresh={onRefresh}
-        isSyncing={isSyncing}
-      />
 
       {/* ========================================================= */}
       {/* SEÇÃO 2: LISTA DE VOTAÇÕES REALIZADAS POR DATA E CATEGORIA */}

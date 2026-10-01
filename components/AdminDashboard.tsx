@@ -48,7 +48,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
   // Tabs for managing votings, options, tracking, attendance or viewing results
   const [activeTab, setActiveTab] = useState<'votings' | 'options' | 'tracking' | 'attendance' | 'analytics'>('votings');
-  const [showLiveMonitor, setShowLiveMonitor] = useState<boolean>(true);
   
   // Category filter for the results dashboard
   const [selectedCategory, setSelectedCategory] = useState<'Gremio' | 'Representante' | 'Alimentação' | 'Outros'>('Gremio');
@@ -431,41 +430,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             Apuração Geral
           </button>
         </div>
-        <div className="flex flex-wrap items-center gap-2 self-end lg:self-auto">
-          {activeTab !== 'tracking' && activeTab !== 'analytics' && (
-            <button
-              type="button"
-              onClick={() => setShowLiveMonitor(prev => !prev)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors flex items-center gap-1.5 cursor-pointer ${
-                showLiveMonitor
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-              }`}
-            >
-              <i className="fas fa-chart-bar"></i>
-              <span>{showLiveMonitor ? 'Ocultar Gráficos em Tempo Real' : 'Exibir Gráficos em Tempo Real'}</span>
-            </button>
-          )}
-          <div className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 flex items-center gap-2 font-mono tabular-nums">
-            <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping"></span>
-            <span>{totalGlobalVotes} votos totais de {totalRegisteredStudents} estudantes</span>
-          </div>
+        <div className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 flex items-center gap-2 self-end lg:self-auto font-mono tabular-nums">
+          <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping"></span>
+          <span>{totalGlobalVotes} votos totais de {totalRegisteredStudents} estudantes</span>
         </div>
       </div>
-
-      {/* Painel de Visualização de Dados Recharts em Tempo Real (visível quando habilitado nas abas operacionais) */}
-      {showLiveMonitor && activeTab !== 'tracking' && activeTab !== 'analytics' && (
-        <RealtimeVotingCharts
-          selections={selections}
-          mealOptions={mealOptions}
-          votingSessions={votingSessions}
-          students={students}
-          attendanceRecords={attendanceRecords}
-          lastSync={lastSync}
-          onRefresh={onSyncDatabase}
-          isSyncing={isSyncing}
-        />
-      )}
 
       {activeTab === 'analytics' && (
         <div className="space-y-8">
@@ -925,9 +894,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           votingSessions={votingSessions}
           students={students}
           attendanceRecords={attendanceRecords}
-          lastSync={lastSync}
-          onRefresh={onSyncDatabase}
-          isSyncing={isSyncing}
         />
       )}
 
