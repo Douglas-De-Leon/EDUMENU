@@ -474,7 +474,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Sincronização em Tempo Real (Realtime Listener) com o Firestore para votações e opções
+  // Sincronização em Tempo Real (Realtime Listener) com o Firestore para votações, opções, votos, presença e alunos
   useEffect(() => {
     if (!userRole) return;
 
@@ -513,9 +513,62 @@ const App: React.FC = () => {
       console.warn("Aviso no listener de opções em tempo real:", err);
     });
 
+    const unsubAttendance = onSnapshot(collection(db, 'attendance'), (snap) => {
+      const list: AttendanceRecord[] = [];
+      snap.forEach(d => list.push(d.data() as AttendanceRecord));
+      const uniqueList = dedupeByKey(list, 'id');
+      setAttendanceRecords(uniqueList);
+      setCachedData(CACHE_KEYS.ATTENDANCE, uniqueList);
+    }, (err) => {
+      console.warn("Aviso no listener de frequência em tempo real:", err);
+    });
+
+    let unsubSelections: (() => void) | null = null;
+    let unsubStudents: (() => void) | null = null;
+
+    if (userRole === 'admin' || userRole === 'master') {
+      unsubSelections = onSnapshot(collection(db, 'selections'), (snap) => {
+        const map = new Map<string, Selection>();
+        snap.forEach(d => {
+          const s = d.data() as Selection;
+          const key = `${s.matricula}_${s.votingSessionId || s.category}_${s.timestamp}`;
+          map.set(key, s);
+        });
+        const uniqueVotes = Array.from(map.values());
+        setSelections(uniqueVotes);
+        setCachedData(CACHE_KEYS.SELECTIONS, uniqueVotes);
+        setLastSync(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      }, (err) => {
+        console.warn("Aviso no listener de votos em tempo real:", err);
+      });
+
+      unsubStudents = onSnapshot(collection(db, 'students'), (snap) => {
+        const list: Student[] = [];
+        snap.forEach(d => {
+          const s = d.data() as Student;
+          list.push({
+            ...s,
+            turno: s.turno || 'Integral',
+            sala: s.sala || '1º Ano',
+            turma: s.turma || 'A'
+          });
+        });
+        if (list.length > 0) {
+          const uniqueStudents = dedupeByKey(list, 'matricula');
+          setRegisteredStudents(uniqueStudents);
+          setCachedData(CACHE_KEYS.STUDENTS, uniqueStudents);
+        }
+      }, (err) => {
+        console.warn("Aviso no listener de alunos em tempo real:", err);
+      });
+    }
+
     return () => {
       unsubSessions();
       unsubMeals();
+      unsubAttendance();
+      if (unsubSelections) unsubSelections();
+      if (unsubStudents) unsubStudents();
     };
   }, [userRole]);
 
@@ -1322,6 +1375,9 @@ const App: React.FC = () => {
               attendanceRecords={attendanceRecords}
               onSaveAttendance={handleSaveAttendance}
               currentSchoolId={currentSchoolId}
+              onSyncDatabase={() => loadAdminData(true)}
+              isSyncing={isSyncing}
+              lastSync={lastSync}
             />
           ) : (
             <UserManagementDashboard 
