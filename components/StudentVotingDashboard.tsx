@@ -428,10 +428,18 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               {[
                 { id: 'all', label: 'Todas as Categorias', icon: 'fa-list-ul' },
+                { id: 'Alimentação', label: 'Alimentação', icon: 'fa-utensils' },
                 { id: 'Gremio', label: 'Grêmio', icon: 'fa-users' },
                 { id: 'Representante', label: 'Representantes', icon: 'fa-user-tie' },
-                { id: 'Alimentação', label: 'Alimentação', icon: 'fa-utensils' },
-                { id: 'Outros', label: 'Outros', icon: 'fa-clipboard-check' }
+                { id: 'Outros', label: 'Outros', icon: 'fa-clipboard-check' },
+                ...votingSessions
+                  .filter(s => s.category && !['Alimentação', 'Gremio', 'Representante', 'Outros'].includes(s.category))
+                  .reduce((acc, s) => {
+                    if (!acc.some(x => x.id === s.category)) {
+                      acc.push({ id: s.category, label: s.category, icon: 'fa-tag' });
+                    }
+                    return acc;
+                  }, [] as { id: string; label: string; icon: string }[])
               ].map(tab => (
                 <button
                   key={tab.id}

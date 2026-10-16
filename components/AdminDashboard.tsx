@@ -8,6 +8,7 @@ import { VotingManagement } from './VotingManagement';
 import { VotingTrackingDashboard } from './VotingTrackingDashboard';
 import { StudentAttendanceManagement } from './StudentAttendanceManagement';
 import { RealtimeVotingCharts } from './RealtimeVotingCharts';
+import { CaseStudyIntelligenceDashboard } from './CaseStudyIntelligenceDashboard';
 
 interface AdminDashboardProps {
   selections: Selection[];
@@ -46,11 +47,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   isSyncing = false,
   lastSync
 }) => {
-  // Tabs for managing votings, options, tracking, attendance or viewing results
-  const [activeTab, setActiveTab] = useState<'votings' | 'options' | 'tracking' | 'attendance' | 'analytics'>('votings');
+  // Tabs for managing votings, tracking, attendance, analytics or case studies
+  const [activeTab, setActiveTab] = useState<'votings' | 'tracking' | 'attendance' | 'analytics' | 'case_studies'>('votings');
   
   // Category filter for the results dashboard
-  const [selectedCategory, setSelectedCategory] = useState<'Gremio' | 'Representante' | 'Alimentação' | 'Outros'>('Gremio');
+  const [selectedCategory, setSelectedCategory] = useState<string>('Alimentação');
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -58,7 +59,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // New option form state
   const [newMeal, setNewMeal] = useState<Partial<MealOption>>({
-    category: 'Gremio',
+    category: 'Alimentação',
     active: true
   });
   
@@ -82,11 +83,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       case 'Representante': return '#F59E0B'; // Amber
       case 'Alimentação': return '#10B981'; // Emerald
       case 'Outros': return '#8B5CF6'; // Violet
-      default: return '#64748B';
+      default: return '#0284C7';
     }
   };
 
-  const categoryOptions = ['Gremio', 'Representante', 'Alimentação', 'Outros'] as const;
+  const categoryOptions = useMemo(() => {
+    const list = ['Alimentação', 'Gremio', 'Representante', 'Outros'];
+    votingSessions.forEach(s => {
+      if (s.category && !list.includes(s.category)) list.push(s.category);
+    });
+    mealOptions.forEach(m => {
+      if (m.category && !list.includes(m.category)) list.push(m.category);
+    });
+    return list;
+  }, [votingSessions, mealOptions]);
 
   // --- Calculations for the Selected Category ---
   const currentCategoryStats = useMemo(() => {
@@ -386,17 +396,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             )}
           </button>
           <button 
-            onClick={() => setActiveTab('options')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-              activeTab === 'options' 
-                ? 'bg-white shadow-sm text-indigo-700 font-black' 
-                : 'text-slate-600 hover:text-slate-800'
-            }`}
-          >
-            <i className="fas fa-vote-yea"></i>
-            Opções / Candidatos
-          </button>
-          <button 
             onClick={() => setActiveTab('tracking')}
             className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
               activeTab === 'tracking' 
@@ -428,6 +427,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           >
             <i className="fas fa-chart-pie"></i>
             Apuração Geral
+          </button>
+          <button 
+            onClick={() => setActiveTab('case_studies')}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              activeTab === 'case_studies' 
+                ? 'bg-white shadow-sm text-purple-700 font-black ring-2 ring-purple-400/30' 
+                : 'text-purple-700 hover:text-purple-900 bg-purple-50/60 font-extrabold'
+            }`}
+          >
+            <i className="fas fa-brain text-purple-600"></i>
+            Estudos de Casos & Inteligência
           </button>
         </div>
         <div className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 flex items-center gap-2 self-end lg:self-auto font-mono tabular-nums">
@@ -913,168 +923,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           onAddVotingSession={onAddVotingSession || (() => {})}
           onUpdateVotingSession={onUpdateVotingSession || (() => {})}
           onDeleteVotingSession={onDeleteVotingSession || (() => {})}
-          onNavigateToOptions={() => setActiveTab('options')}
+          onAddMeal={onAddMeal}
         />
       )}
 
-      {activeTab === 'options' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* Quick link banner to Votings */}
-          <div className="lg:col-span-3 bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 border border-indigo-100 p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-lg shrink-0">
-                <i className="fas fa-calendar-check"></i>
-              </div>
-              <div>
-                <h4 className="font-bold text-slate-800 text-sm">Pronto para criar ou agendar uma eleição?</h4>
-                <p className="text-xs text-slate-500">Acesse a área de Criar Votação para definir a data específica e selecionar os itens habilitados.</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setActiveTab('votings')}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-all shrink-0 active:scale-95"
-            >
-              Criar / Agendar Votação →
-            </button>
-          </div>
-
-          {/* Form to Register New Options */}
-          <section className="lg:col-span-1 bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6 h-fit lg:sticky lg:top-4">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
-              <i className="fas fa-plus-circle text-indigo-500"></i>
-              Criar Nova Opção de Voto
-            </h3>
-            
-            <form onSubmit={handleAddMealSubmit} className="space-y-4">
-              <div>
-                <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">Nome Completo / Título</label>
-                <input 
-                  type="text" 
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                  value={newMeal.name || ''}
-                  onChange={e => setNewMeal({...newMeal, name: e.target.value})}
-                  required
-                  placeholder="Ex: Chapa A, João da Silva, Feijoada..."
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">Categoria de Votação</label>
-                  <select
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                    value={newMeal.category || 'Gremio'}
-                    onChange={e => setNewMeal({...newMeal, category: e.target.value as any})}
-                    required
-                  >
-                    <option value="Gremio">🗳️ Grêmio Escolar</option>
-                    <option value="Representante">👤 Representante de Classe</option>
-                    <option value="Alimentação">🍎 Alimentação / Merenda</option>
-                    <option value="Outros">📋 Outros Assuntos</option>
-                  </select>
-                </div>
-
-                <div className="col-span-2">
-                  <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">Capa / Identificador Único</label>
-                  <input 
-                    type="text" 
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                    value={newMeal.calories || ''}
-                    onChange={e => setNewMeal({...newMeal, calories: e.target.value})}
-                    placeholder="Ex: Chapa 10, Nº 205, Opção B"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">Propostas / Descrição Detalhada</label>
-                <textarea 
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none h-28 text-sm"
-                  value={newMeal.description || ''}
-                  onChange={e => setNewMeal({...newMeal, description: e.target.value})}
-                  required
-                  placeholder="Descreva as intenções, propostas, pratos ou detalhes dessa candidatura..."
-                />
-              </div>
-
-              <button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all active:scale-95 text-sm">
-                Gravar Opção na Urna
-              </button>
-            </form>
-          </section>
-
-          {/* Active Candidates / Options list */}
-          <section className="lg:col-span-2 bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6">
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
-              <i className="fas fa-list-ul text-slate-400"></i>
-              Lista de Opções Cadastradas
-              <span className="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-full ml-2">
-                {mealOptions.length}
-              </span>
-            </h3>
-
-            <div className="space-y-4">
-              {categoryOptions.map(cat => {
-                const filteredOptions = mealOptions.filter(m => m.category === cat);
-                if (filteredOptions.length === 0) return null;
-
-                return (
-                  <div key={cat} className="space-y-3 pb-4 border-b border-slate-100 last:border-0 last:pb-0">
-                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getCategoryThemeColor(cat) }}></span>
-                      {getCategoryLabel(cat)}
-                    </h4>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {filteredOptions.map(m => (
-                        <div key={m.id} className="flex flex-col justify-between p-4 bg-slate-50 rounded-2xl border border-slate-150/80">
-                          <div>
-                            <div className="flex items-center justify-between gap-2 mb-1.5">
-                              <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
-                                m.active ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'
-                              }`}>
-                                {m.active ? 'ATIVO' : 'SUSPENSO'}
-                              </span>
-                              <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">ID: {m.calories || 'N/A'}</span>
-                            </div>
-                            <h5 className="font-bold text-slate-800 leading-tight mb-1">{m.name}</h5>
-                            <p className="text-slate-500 text-xs line-clamp-3 leading-relaxed">{m.description}</p>
-                          </div>
-
-                          <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-slate-200/50">
-                            <button 
-                              type="button"
-                              onClick={() => toggleMealStatus(m.id)}
-                              className={`text-xs font-bold px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-colors ${
-                                m.active 
-                                  ? 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-700' 
-                                  : 'bg-green-50 hover:bg-green-100 border-green-200 text-green-700'
-                              }`}
-                            >
-                              <i className={`fas ${m.active ? 'fa-eye-slash' : 'fa-eye'}`}></i>
-                              {m.active ? 'Suspender' : 'Habilitar'}
-                            </button>
-                            <button 
-                              type="button"
-                              onClick={() => confirmDeleteMeal(m.id)}
-                              className="text-xs font-bold px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 flex items-center gap-1.5 transition-colors"
-                            >
-                              <i className="fas fa-trash"></i>
-                              Deletar
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
-        </div>
+      {activeTab === 'case_studies' && (
+        <CaseStudyIntelligenceDashboard
+          selections={selections}
+          mealOptions={mealOptions}
+          votingSessions={votingSessions}
+          students={students}
+          attendanceRecords={attendanceRecords}
+          onNavigateToVoting={() => setActiveTab('votings')}
+          onReuseVoting={(session, targetDate) => {
+            if (onAddVotingSession) {
+              const [y, m, d] = targetDate.split('-').map(Number);
+              const targetDateBR = new Date(y, m - 1, d).toLocaleDateString('pt-BR');
+              const newSession: VotingSession = {
+                id: 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+                title: `${session.title} (Medição ${targetDateBR})`,
+                description: session.description,
+                category: session.category,
+                date: targetDate,
+                optionIds: [...session.optionIds],
+                active: true,
+                parentSessionId: session.parentSessionId || session.id,
+                createdAt: new Date().toISOString()
+              };
+              onAddVotingSession(newSession);
+              setActiveTab('votings');
+            }
+          }}
+        />
       )}
     </div>
   );

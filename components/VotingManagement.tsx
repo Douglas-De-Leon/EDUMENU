@@ -8,6 +8,7 @@ interface VotingManagementProps {
   onUpdateVotingSession: (session: VotingSession) => void;
   onDeleteVotingSession: (id: string) => void;
   onNavigateToOptions?: () => void;
+  onAddMeal?: (meal: MealOption) => void;
 }
 
 export const VotingManagement: React.FC<VotingManagementProps> = ({
@@ -16,24 +17,54 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
   onAddVotingSession,
   onUpdateVotingSession,
   onDeleteVotingSession,
-  onNavigateToOptions
+  onNavigateToOptions,
+  onAddMeal
 }) => {
-  // Today formatted as YYYY-MM-DD for initial default
+  // Today formatted as YYYY-MM-DD
   const getTodayStr = () => {
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   };
 
+  // Standard predefined categories
+  const standardCategories = ['Alimentação', 'Gremio', 'Representante', 'Outros'] as const;
+
+  // Extract all existing categories dynamically from sessions and meal options
+  const allAvailableCategories = useMemo(() => {
+    const set = new Set<string>(standardCategories);
+    votingSessions.forEach(s => s.category && set.add(s.category));
+    mealOptions.forEach(m => m.category && set.add(m.category));
+    return Array.from(set);
+  }, [votingSessions, mealOptions]);
+
   // Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<'Gremio' | 'Representante' | 'Alimentação' | 'Outros'>('Gremio');
+  const [category, setCategory] = useState<string>('Alimentação');
+  const [isCreatingNewCategory, setIsCreatingNewCategory] = useState(false);
+  const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [votingDate, setVotingDate] = useState<string>(getTodayStr);
   const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([]);
   const [currentSelectedDropdownOption, setCurrentSelectedDropdownOption] = useState<string>('');
   const [formError, setFormError] = useState<string | null>(null);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>('all');
+
+  // Inline Option Creation State (Permitir criar uma ou mais opções no mesmo cadastro!)
+  const [showAddOptionForm, setShowAddOptionForm] = useState(false);
+  const [newOptionName, setNewOptionName] = useState('');
+  const [newOptionDesc, setNewOptionDesc] = useState('');
+  const [newOptionIdent, setNewOptionIdent] = useState('');
+  const [newOptionType, setNewOptionType] = useState<string>('Almoço');
+
+  // Multi-day reuse modal state (Reutilizar em dias diferentes com a mesma regra de presença)
+  const [reuseModalSession, setReuseModalSession] = useState<VotingSession | null>(null);
+  const [reuseTargetDate, setReuseTargetDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  });
+  const [reuseTitle, setReuseTitle] = useState('');
 
   // Helper Labels & Colors
   const getCategoryLabel = (cat: string) => {
@@ -46,40 +77,40 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
     }
   };
 
-  const getCategoryIcon = (cat: string) => {
-    switch (cat) {
-      case 'Gremio': return 'fa-users text-indigo-500';
-      case 'Representante': return 'fa-user-tie text-amber-500';
-      case 'Alimentação': return 'fa-utensils text-emerald-500';
-      case 'Outros': return 'fa-clipboard-list text-purple-500';
-      default: return 'fa-vote-yea text-slate-500';
-    }
-  };
-
   const getCategoryThemeColor = (cat: string) => {
     switch (cat) {
       case 'Gremio': return '#4F46E5';
       case 'Representante': return '#F59E0B';
       case 'Alimentação': return '#10B981';
       case 'Outros': return '#8B5CF6';
-      default: return '#64748B';
+      default: return '#0284C7';
     }
   };
 
-  // Filter ONLY items registered and enabled (active === true) for the selected category
+  // Filter ONLY items registered and enabled for the selected category
   const enabledOptionsForCategory = useMemo(() => {
     return mealOptions.filter(m => m.category === category && m.active !== false);
   }, [mealOptions, category]);
 
-  // Handle category change: reset selected options or keep valid ones
-  const handleCategoryChange = (newCat: 'Gremio' | 'Representante' | 'Alimentação' | 'Outros') => {
+  // Handle category change
+  const handleCategoryChange = (newCat: string) => {
     setCategory(newCat);
+    setIsCreatingNewCategory(false);
     setCurrentSelectedDropdownOption('');
-    // Filter down selected IDs that belong to the new category
     const validIds = mealOptions
       .filter(m => m.category === newCat && m.active !== false)
       .map(m => m.id);
     setSelectedOptionIds(prev => prev.filter(id => validIds.includes(id)));
+    setFormError(null);
+  };
+
+  // Confirm custom category creation
+  const handleApplyCustomCategory = () => {
+    const trimmed = customCategoryInput.trim();
+    if (!trimmed) return;
+    setCategory(trimmed);
+    setIsCreatingNewCategory(false);
+    setCustomCategoryInput('');
     setFormError(null);
   };
 
@@ -94,7 +125,7 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
     setFormError(null);
   };
 
-  // Select all enabled options in this category
+  // Quick Select All
   const handleSelectAllEnabled = () => {
     const allIds = enabledOptionsForCategory.map(o => o.id);
     setSelectedOptionIds(allIds);
@@ -104,6 +135,40 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
   // Remove option from selected list
   const handleRemoveOption = (idToRemove: string) => {
     setSelectedOptionIds(prev => prev.filter(id => id !== idToRemove));
+  };
+
+  // Create & Add New Option right inside this form!
+  const handleCreateAndAttachOption = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newOptionName.trim()) {
+      setFormError('Informe o nome da nova opção.');
+      return;
+    }
+
+    const newId = 'opt_' + Date.now().toString() + '_' + Math.random().toString(36).substring(2, 7);
+    const newMeal: MealOption = {
+      id: newId,
+      name: newOptionName.trim(),
+      description: newOptionDesc.trim() || 'Opção cadastrada diretamente na votação',
+      category: category as any,
+      calories: newOptionIdent.trim() || (category === 'Alimentação' ? newOptionType : 'Candidato'),
+      active: true,
+      mealType: newOptionType
+    };
+
+    if (onAddMeal) {
+      onAddMeal(newMeal);
+    }
+
+    // Attach to current selection
+    setSelectedOptionIds(prev => [...prev, newId]);
+
+    // Reset inline option form
+    setNewOptionName('');
+    setNewOptionDesc('');
+    setNewOptionIdent('');
+    setShowAddOptionForm(false);
+    setFormError(null);
   };
 
   // Quick date pickers
@@ -122,7 +187,7 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
       return;
     }
     if (selectedOptionIds.length === 0) {
-      setFormError('Selecione pelo menos uma opção cadastrada e habilitada para esta votação.');
+      setFormError('Selecione ou crie pelo menos uma opção para esta votação.');
       return;
     }
 
@@ -149,6 +214,31 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
     setFormError(null);
   };
 
+  // Reutilizar / Medir em Novo Dia (Multi-Day Measurement)
+  const handleConfirmReuse = () => {
+    if (!reuseModalSession || !reuseTargetDate) return;
+
+    const baseTitle = reuseTitle.trim() || reuseModalSession.title;
+    const [y, m, d] = reuseTargetDate.split('-').map(Number);
+    const targetDateBR = new Date(y, m - 1, d).toLocaleDateString('pt-BR');
+
+    const newReusedSession: VotingSession = {
+      id: 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      title: `${baseTitle} (Medição ${targetDateBR})`,
+      description: reuseModalSession.description,
+      category: reuseModalSession.category,
+      date: reuseTargetDate,
+      optionIds: [...reuseModalSession.optionIds],
+      active: true,
+      parentSessionId: reuseModalSession.parentSessionId || reuseModalSession.id,
+      createdAt: new Date().toISOString()
+    };
+
+    onAddVotingSession(newReusedSession);
+    setReuseModalSession(null);
+    setReuseTitle('');
+  };
+
   // Toggle active status
   const handleToggleActive = (session: VotingSession) => {
     onUpdateVotingSession({
@@ -163,7 +253,6 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
     if (filterCategory !== 'all') {
       list = list.filter(s => s.category === filterCategory);
     }
-    // Sort by date descending (newest first)
     return list.sort((a, b) => b.date.localeCompare(a.date));
   }, [votingSessions, filterCategory]);
 
@@ -192,7 +281,7 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
       {/* Delete Confirmation Modal */}
       {sessionToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 space-y-6 animate-scaleIn">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 space-y-6">
             <div className="text-center">
               <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl">
                 <i className="fas fa-trash-alt"></i>
@@ -225,20 +314,91 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
         </div>
       )}
 
-      {/* Main Grid: Left = Create Voting Form, Right = List of Created Votings */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* Modal: Reutilizar Votação para Outro Dia (Multi-Day Measurement) */}
+      {reuseModalSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-slate-100 space-y-6 animate-scaleIn">
+            <div>
+              <div className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider mb-2 border border-emerald-200">
+                <i className="fas fa-redo-alt"></i> Mensuração em Dias Diferentes
+              </div>
+              <h3 className="text-xl font-black text-slate-900">
+                Reutilizar Votação para Novo Dia
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Programe esta mesma votação com as mesmas opções de votos ({reuseModalSession.optionIds.length} opções) para ser mensurada em uma nova data. A <strong>regra de presença em sala de aula</strong> será exigida para os alunos na nova data escolhida.
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Votação Base:</span>
+              <p className="font-bold text-slate-800">{reuseModalSession.title}</p>
+              <p className="text-slate-500">Categoria: <strong>{getCategoryLabel(reuseModalSession.category)}</strong></p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-black text-slate-600 uppercase tracking-wider block mb-1">
+                  Selecione a Nova Data para a Medição:
+                </label>
+                <input
+                  type="date"
+                  value={reuseTargetDate}
+                  onChange={e => setReuseTargetDate(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-black text-slate-600 uppercase tracking-wider block mb-1">
+                  Título Personalizado (Opcional):
+                </label>
+                <input
+                  type="text"
+                  placeholder={reuseModalSession.title}
+                  value={reuseTitle}
+                  onChange={e => setReuseTitle(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setReuseModalSession(null)}
+                className="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReuse}
+                className="flex-1 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-emerald-600/20 text-sm flex items-center justify-center gap-2"
+              >
+                <i className="fas fa-calendar-check"></i>
+                Agendar Medição
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Grid: Left = Single Unified Registration Form, Right = List of Created Votings */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
-        {/* FORM PANEL: Criar Nova Votação */}
-        <section className="lg:col-span-1 bg-white p-6 sm:p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6 h-fit lg:sticky lg:top-4">
+        {/* FORM PANEL: Cadastro Unificado de Votação (Formulário Único) */}
+        <section className="lg:col-span-5 bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/90 shadow-sm space-y-6 h-fit lg:sticky lg:top-4">
           <div>
             <div className="inline-flex items-center gap-2 text-xs font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-3 py-1 rounded-full mb-2">
-              <i className="fas fa-calendar-plus"></i> Agendamento & Urna
+              <i className="fas fa-layer-group"></i> Cadastro Unificado
             </div>
-            <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+            <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
               Criar Nova Votação
             </h3>
             <p className="text-xs text-slate-500 mt-1">
-              Configure o dia específico e selecione quais opções habilitadas participarão da cédula.
+              Cadastre a votação, crie categorias personalizadas e adicione uma ou mais opções diretamente nesta mesma tela.
             </p>
           </div>
 
@@ -249,37 +409,70 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
             </div>
           )}
 
-          <form onSubmit={handleCreateVoting} className="space-y-4">
+          <form onSubmit={handleCreateVoting} className="space-y-5">
             
-            {/* 1. Category Selection */}
-            <div>
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">
-                1. Categoria da Votação
-              </label>
-              <select
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-medium text-slate-800"
-                value={category}
-                onChange={e => handleCategoryChange(e.target.value as any)}
-                required
-              >
-                <option value="Gremio">🗳️ Grêmio Escolar</option>
-                <option value="Representante">👤 Representante de Classe</option>
-                <option value="Alimentação">🍎 Alimentação / Merenda</option>
-                <option value="Outros">📋 Outros Assuntos</option>
-              </select>
+            {/* 1. Category Selection & Creation */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <label className="text-xs font-black text-slate-600 uppercase tracking-wider block">
+                  1. Categoria da Votação
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingNewCategory(prev => !prev)}
+                  className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                >
+                  <i className={`fas ${isCreatingNewCategory ? 'fa-times' : 'fa-plus'}`}></i>
+                  {isCreatingNewCategory ? 'Escolher existente' : '+ Criar Categoria'}
+                </button>
+              </div>
+
+              {!isCreatingNewCategory ? (
+                <select
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800"
+                  value={category}
+                  onChange={e => handleCategoryChange(e.target.value)}
+                  required
+                >
+                  {allAvailableCategories.map(cat => (
+                    <option key={cat} value={cat}>
+                      {getCategoryLabel(cat)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={customCategoryInput}
+                    onChange={e => setCustomCategoryInput(e.target.value)}
+                    placeholder="Ex: Almoço Saudável, Projetos, etc..."
+                    className="flex-1 px-3.5 py-2.5 bg-white border border-indigo-300 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none shadow-xs"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={handleApplyCustomCategory}
+                    disabled={!customCategoryInput.trim()}
+                    className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-bold rounded-xl text-xs transition-colors shrink-0"
+                  >
+                    Usar
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* 2. Specific Date Picker */}
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-xs font-black text-slate-500 uppercase tracking-wider block">
-                  2. Data Específica da Votação
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center">
+                <label className="text-xs font-black text-slate-600 uppercase tracking-wider block">
+                  2. Data da Votação
                 </label>
                 <span className="text-[10px] text-indigo-600 font-bold uppercase">Obrigatório</span>
               </div>
               <input
                 type="date"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-medium text-slate-800"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800 font-mono"
                 value={votingDate}
                 onChange={e => {
                   setVotingDate(e.target.value);
@@ -288,7 +481,7 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
                 required
               />
               {/* Quick Date Shortcuts */}
-              <div className="flex gap-2 mt-2">
+              <div className="flex gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => setQuickDate(0)}
@@ -313,116 +506,154 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
               </div>
             </div>
 
-            {/* 3. Title / Label (Optional or Auto) */}
-            <div>
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">
+            {/* 3. Title */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-black text-slate-600 uppercase tracking-wider block">
                 3. Título da Votação
               </label>
               <input
                 type="text"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm placeholder:text-slate-400"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm placeholder:text-slate-400 font-medium text-slate-800"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
-                placeholder={`Ex: Eleição de ${getCategoryLabel(category)}`}
+                placeholder={`Ex: Votação de ${getCategoryLabel(category)}`}
               />
-              <p className="text-[10px] text-slate-400 mt-1">Se deixar em branco, o sistema gerará o título automaticamente com a categoria e a data.</p>
             </div>
 
-            {/* 4. DROPDOWN (LISTA SUSPENSA) PARA ITENS CADASTRADOS E HABILITADOS */}
-            <div className="pt-2 border-t border-slate-100">
-              <div className="flex justify-between items-center mb-1">
-                <label className="text-xs font-black text-slate-500 uppercase tracking-wider block">
-                  4. Itens Cadastrados e Habilitados
-                </label>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
-                  {enabledOptionsForCategory.length} habilitados
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mb-2">
-                Filtrado automaticamente pela categoria <strong>{getCategoryLabel(category)}</strong>:
-              </p>
-
-              {enabledOptionsForCategory.length > 0 ? (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <select
-                      className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-medium text-slate-800"
-                      value={currentSelectedDropdownOption}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setCurrentSelectedDropdownOption(val);
-                        if (val) {
-                          handleAddOptionFromDropdown(val);
-                        }
-                      }}
-                    >
-                      <option value="">Selecione um item/candidato da lista suspensa...</option>
-                      {enabledOptionsForCategory.map(opt => {
-                        const isAlreadySelected = selectedOptionIds.includes(opt.id);
-                        return (
-                          <option key={opt.id} value={opt.id} disabled={isAlreadySelected}>
-                            {opt.name} {opt.calories ? `(ID/Chapa: ${opt.calories})` : ''} {isAlreadySelected ? '✓ (Já incluído)' : ''}
-                          </option>
-                        );
-                      })}
-                    </select>
-                    
-                    <button
-                      type="button"
-                      onClick={() => handleAddOptionFromDropdown()}
-                      disabled={!currentSelectedDropdownOption || selectedOptionIds.includes(currentSelectedDropdownOption)}
-                      className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition-all shrink-0"
-                      title="Adicionar à votação"
-                    >
-                      <i className="fas fa-plus"></i>
-                    </button>
-                  </div>
-
-                  {/* Quick Select All Button */}
-                  <div className="flex justify-between items-center pt-1">
-                    <button
-                      type="button"
-                      onClick={handleSelectAllEnabled}
-                      className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-colors"
-                    >
-                      <i className="fas fa-check-double"></i> Incluir todos os {enabledOptionsForCategory.length} habilitados
-                    </button>
-                    {selectedOptionIds.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedOptionIds([])}
-                        className="text-[11px] font-bold text-slate-400 hover:text-red-500 transition-colors"
-                      >
-                        Limpar seleção
-                      </button>
-                    )}
-                  </div>
+            {/* 4. UNIFIED OPTIONS: PICK EXISTING OR CREATE NEW RIGHT HERE! */}
+            <div className="pt-3 border-t border-slate-200/80 space-y-3">
+              <div className="flex justify-between items-center">
+                <div>
+                  <label className="text-xs font-black text-slate-700 uppercase tracking-wider block">
+                    4. Opções de Voto da Cédula
+                  </label>
+                  <span className="text-[11px] text-slate-400">
+                    Crie opções no ato ou selecione as já cadastradas:
+                  </span>
                 </div>
-              ) : (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 space-y-2">
-                  <div className="flex items-center gap-1.5 font-bold">
-                    <i className="fas fa-info-circle text-amber-600"></i>
-                    Nenhum item habilitado em {getCategoryLabel(category)}!
+
+                <button
+                  type="button"
+                  onClick={() => setShowAddOptionForm(prev => !prev)}
+                  className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                >
+                  <i className={`fas ${showAddOptionForm ? 'fa-minus' : 'fa-plus'}`}></i>
+                  <span>{showAddOptionForm ? 'Fechar Cadastro' : '+ Criar Opção Aqui'}</span>
+                </button>
+              </div>
+
+              {/* INLINE OPTION CREATOR: Criar nova opção no mesmo cadastro! */}
+              {showAddOptionForm && (
+                <div className="p-4 bg-indigo-50/50 border border-indigo-200 rounded-2xl space-y-3 animate-fadeIn">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <i className="fas fa-plus-circle text-indigo-600"></i>
+                      Nova Opção de Voto / Prato
+                    </span>
+                    <span className="text-[10px] text-indigo-600 font-bold bg-white px-2 py-0.5 rounded-full border border-indigo-100">
+                      Categoria: {getCategoryLabel(category)}
+                    </span>
                   </div>
-                  <p className="text-[11px] text-amber-700 leading-relaxed">
-                    Você precisa cadastrar ou habilitar opções nesta categoria para poder incluí-las na votação.
-                  </p>
-                  {onNavigateToOptions && (
+
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Nome da Opção / Prato / Candidato (Ex: Feijoada Especial, Salada Completa...)"
+                      value={newOptionName}
+                      onChange={e => setNewOptionName(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={newOptionType}
+                        onChange={e => setNewOptionType(e.target.value)}
+                        className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800"
+                      >
+                        <option value="Almoço">🍛 Almoço Completo</option>
+                        <option value="Lanche">🥪 Lanche / Fruta</option>
+                        <option value="Vegetariano">🥗 Vegetariano</option>
+                        <option value="Sobremesa">🍎 Sobremesa</option>
+                        <option value="Candidato">👤 Candidato / Chapa</option>
+                        <option value="Geral">📋 Opção Geral</option>
+                      </select>
+
+                      <input
+                        type="text"
+                        placeholder="Identificador / Calorias (Ex: 450 kcal, Nº 10)"
+                        value={newOptionIdent}
+                        onChange={e => setNewOptionIdent(e.target.value)}
+                        className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+
+                    <textarea
+                      placeholder="Descrição, ingredientes ou propostas..."
+                      value={newOptionDesc}
+                      onChange={e => setNewOptionDesc(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none h-16 placeholder:text-slate-400"
+                    />
+
                     <button
                       type="button"
-                      onClick={onNavigateToOptions}
-                      className="w-full text-center font-bold text-indigo-700 bg-white border border-amber-300 py-1.5 rounded-lg hover:bg-amber-100 transition-colors"
+                      onClick={handleCreateAndAttachOption}
+                      disabled={!newOptionName.trim()}
+                      className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm"
                     >
-                      Ir para Cadastro de Opções →
+                      <i className="fas fa-check"></i>
+                      Salvar e Incluir Nesta Votação
                     </button>
-                  )}
+                  </div>
                 </div>
               )}
 
-              {/* Selected Options Chips/Cards Preview */}
-              <div className="mt-3 space-y-1.5">
+              {/* Dropdown de opções existentes */}
+              {enabledOptionsForCategory.length > 0 && (
+                <div className="flex gap-2">
+                  <select
+                    className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-medium text-slate-800"
+                    value={currentSelectedDropdownOption}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setCurrentSelectedDropdownOption(val);
+                      if (val) handleAddOptionFromDropdown(val);
+                    }}
+                  >
+                    <option value="">Selecione uma opção já cadastrada...</option>
+                    {enabledOptionsForCategory.map(opt => {
+                      const isAlreadySelected = selectedOptionIds.includes(opt.id);
+                      return (
+                        <option key={opt.id} value={opt.id} disabled={isAlreadySelected}>
+                          {opt.name} {opt.calories ? `(${opt.calories})` : ''} {isAlreadySelected ? '✓ (Incluído)' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => handleAddOptionFromDropdown()}
+                    disabled={!currentSelectedDropdownOption || selectedOptionIds.includes(currentSelectedDropdownOption)}
+                    className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition-all shrink-0"
+                  >
+                    <i className="fas fa-plus"></i>
+                  </button>
+                </div>
+              )}
+
+              {/* Selected Options Chips */}
+              <div className="space-y-1.5">
                 <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-wider text-slate-400">
-                  <span>Itens Selecionados para a Cédula ({selectedOptionIds.length})</span>
+                  <span>Opções na Cédula ({selectedOptionIds.length}):</span>
+                  {selectedOptionIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOptionIds([])}
+                      className="text-slate-400 hover:text-red-500"
+                    >
+                      Limpar
+                    </button>
+                  )}
                 </div>
 
                 {selectedOptionIds.length > 0 ? (
@@ -458,22 +689,22 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
                   </div>
                 ) : (
                   <p className="text-[11px] text-slate-400 italic bg-slate-50/70 p-3 rounded-xl border border-dashed border-slate-200 text-center">
-                    Nenhum item selecionado ainda. Escolha no menu suspenso acima.
+                    Nenhuma opção incluída ainda. Crie uma nova opção acima ou selecione uma existente.
                   </p>
                 )}
               </div>
             </div>
 
-            {/* 5. Description (Optional) */}
-            <div>
-              <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">
+            {/* 5. Description */}
+            <div className="space-y-1">
+              <label className="text-xs font-black text-slate-600 uppercase tracking-wider block">
                 5. Descrição / Instruções aos Alunos (Opcional)
               </label>
               <textarea
-                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs h-20 placeholder:text-slate-400"
+                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs h-18 placeholder:text-slate-400"
                 value={description}
                 onChange={e => setDescription(e.target.value)}
-                placeholder="Orientações aos votantes, regras ou horários..."
+                placeholder="Ex: Refeição do dia com sobremesa inclusa..."
               />
             </div>
 
@@ -489,34 +720,34 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
           </form>
         </section>
 
-        {/* LIST PANEL: Votações Criadas e Agendadas */}
-        <section className="lg:col-span-2 bg-white p-6 sm:p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6">
+        {/* LIST PANEL: Votações Cadastradas & Reutilização para Medição em Dias Diferentes */}
+        <section className="lg:col-span-7 bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/90 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+              <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
                 <i className="fas fa-calendar-check text-indigo-500"></i>
                 Votações Cadastradas e Agendadas
-                <span className="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-full ml-2">
+                <span className="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-full ml-2 font-mono">
                   {votingSessions.length}
                 </span>
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Votações abertas, agendadas por data e seus itens participantes
+                Votações abertas, agendadas por data e opções para mensurar em dias diferentes
               </p>
             </div>
 
-            {/* Category Filter Pills */}
-            <div className="flex flex-wrap gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-150">
+            {/* Category Filter */}
+            <div className="flex flex-wrap gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
               <button
                 type="button"
                 onClick={() => setFilterCategory('all')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
                   filterCategory === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
                 Todas ({votingSessions.length})
               </button>
-              {(['Gremio', 'Representante', 'Alimentação', 'Outros'] as const).map(cat => {
+              {allAvailableCategories.slice(0, 4).map(cat => {
                 const count = votingSessions.filter(s => s.category === cat).length;
                 return (
                   <button
@@ -527,7 +758,7 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
                       filterCategory === cat ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                     }`}
                   >
-                    {cat === 'Gremio' ? 'Grêmio' : cat === 'Representante' ? 'Rep.' : cat === 'Alimentação' ? 'Alim.' : 'Outros'} ({count})
+                    {cat.substring(0, 5)}. ({count})
                   </button>
                 );
               })}
@@ -572,6 +803,12 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
                               ★ Votação do Dia
                             </span>
                           )}
+
+                          {session.parentSessionId && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              <i className="fas fa-link text-[9px] mr-1"></i> Medição Recorrente
+                            </span>
+                          )}
                         </div>
 
                         <h4 className="text-base font-extrabold text-slate-800">{session.title}</h4>
@@ -583,18 +820,18 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
                       {/* Date Badge */}
                       <div className="sm:text-right shrink-0">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Data da Votação</span>
-                        <span className="text-sm font-black text-slate-800 flex items-center sm:justify-end gap-1.5">
+                        <span className="text-sm font-black text-slate-800 flex items-center sm:justify-end gap-1.5 font-mono">
                           <i className="far fa-calendar-alt text-indigo-500"></i>
                           {formatDateDisplay(session.date)}
                         </span>
                       </div>
                     </div>
 
-                    {/* Participating Options / Candidates */}
+                    {/* Participating Options */}
                     <div className="pt-3">
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                          Itens / Candidatos na Cédula ({includedOptions.length}):
+                          Itens / Opções na Cédula ({includedOptions.length}):
                         </span>
                       </div>
 
@@ -618,29 +855,44 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
                       </div>
                     </div>
 
-                    {/* Card Actions */}
-                    <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-slate-200/50">
+                    {/* Card Actions: Reutilizar para Outro Dia, Pausar, Excluir */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 mt-4 pt-3 border-t border-slate-200/50">
                       <button
                         type="button"
-                        onClick={() => handleToggleActive(session)}
-                        className={`text-xs font-bold px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-colors ${
-                          session.active
-                            ? 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-700'
-                            : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-700'
-                        }`}
+                        onClick={() => {
+                          setReuseModalSession(session);
+                          setReuseTitle(session.title);
+                        }}
+                        className="text-xs font-bold px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 flex items-center gap-1.5 transition-colors"
+                        title="Reutilizar esta votação com as mesmas opções para mensurar em outra data"
                       >
-                        <i className={`fas ${session.active ? 'fa-pause' : 'fa-play'}`}></i>
-                        {session.active ? 'Pausar Votação' : 'Ativar Votação'}
+                        <i className="fas fa-redo-alt"></i>
+                        Reutilizar em Outro Dia
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => setSessionToDelete(session.id)}
-                        className="text-xs font-bold px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 flex items-center gap-1.5 transition-colors"
-                      >
-                        <i className="fas fa-trash"></i>
-                        Excluir
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleActive(session)}
+                          className={`text-xs font-bold px-3 py-1.5 rounded-xl border flex items-center gap-1.5 transition-colors ${
+                            session.active
+                              ? 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-700'
+                              : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-700'
+                          }`}
+                        >
+                          <i className={`fas ${session.active ? 'fa-pause' : 'fa-play'}`}></i>
+                          {session.active ? 'Pausar Votação' : 'Ativar Votação'}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSessionToDelete(session.id)}
+                          className="text-xs font-bold px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 flex items-center gap-1.5 transition-colors"
+                        >
+                          <i className="fas fa-trash"></i>
+                          Excluir
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -652,7 +904,7 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
                 </div>
                 <h4 className="text-base font-bold text-slate-700 mb-1">Nenhuma votação configurada</h4>
                 <p className="text-xs text-slate-400 max-w-sm mx-auto mb-4">
-                  Use o formulário ao lado para escolher a categoria, selecionar o dia específico e os itens habilitados para criar uma votação.
+                  Use o formulário ao lado para cadastrar uma votação unificada, criar opções na hora e agendar as datas de medição.
                 </p>
               </div>
             )}

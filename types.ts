@@ -11,6 +11,10 @@ export interface Student {
   turno: string;
   sala: string;
   turma?: string;
+  email?: string;
+  responsibleName?: string;
+  responsibleEmail?: string;
+  responsiblePhone?: string;
   schoolId?: string; // Optional for backward compatibility with existing records
 }
 
@@ -26,16 +30,17 @@ export interface MealOption {
   id: string;
   name: string;
   description: string;
-  category: 'Alimentação' | 'Gremio' | 'Representante' | 'Outros';
+  category: 'Alimentação' | 'Gremio' | 'Representante' | 'Outros' | (string & {});
   calories?: string;
   active?: boolean;
   schoolId?: string;
+  mealType?: 'Almoço' | 'Lanche' | 'Vegetariano' | 'Sobremesa' | 'Candidato' | 'Geral' | string;
 }
 
 export interface Selection {
   matricula: string;
   mealId: string;
-  category: 'Alimentação' | 'Gremio' | 'Representante' | 'Outros';
+  category: 'Alimentação' | 'Gremio' | 'Representante' | 'Outros' | (string & {});
   timestamp: string;
   turno: string;
   sala: string;
@@ -48,12 +53,14 @@ export interface VotingSession {
   id: string;
   title: string;
   description?: string;
-  category: 'Alimentação' | 'Gremio' | 'Representante' | 'Outros';
+  category: 'Alimentação' | 'Gremio' | 'Representante' | 'Outros' | (string & {});
   date: string; // YYYY-MM-DD
   optionIds: string[]; // IDs of the selected enabled MealOptions
   active: boolean;
   schoolId?: string;
   createdAt?: string;
+  parentSessionId?: string; // If measured/reused across multiple days
+  recurringDates?: string[]; // History of dates this session was scheduled/measured
 }
 
 export interface AttendanceRecord {

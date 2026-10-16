@@ -72,13 +72,34 @@ export const RealtimeVotingCharts: React.FC<RealtimeVotingChartsProps> = ({
   const todayStr = getTodayDateStr();
 
   // Filter states
-  const [selectedCategory, setSelectedCategory] = useState<'Todas' | 'Gremio' | 'Representante' | 'Alimentação' | 'Outros'>('Todas');
+  const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
   const [selectedSessionId, setSelectedSessionId] = useState<string>('all');
   const [dateScope, setDateScope] = useState<'all' | 'today' | 'custom'>('all');
   const [customDate, setCustomDate] = useState<string>(todayStr);
   const [salaGrouping, setSalaGrouping] = useState<'sala' | 'turma'>('sala');
   const [turnoFilter, setTurnoFilter] = useState<string>('all');
   const [salaFilter, setSalaFilter] = useState<string>('all');
+
+  const dynamicCategories = useMemo(() => {
+    const list = [
+      { id: 'Todas', label: 'Todas as Categorias' },
+      { id: 'Alimentação', label: 'Alimentação / Merenda' },
+      { id: 'Gremio', label: 'Grêmio Escolar' },
+      { id: 'Representante', label: 'Representante de Classe' },
+      { id: 'Outros', label: 'Outros Assuntos' }
+    ];
+    votingSessions.forEach(s => {
+      if (s.category && !list.some(item => item.id === s.category)) {
+        list.push({ id: s.category, label: s.category });
+      }
+    });
+    mealOptions.forEach(m => {
+      if (m.category && !list.some(item => item.id === m.category)) {
+        list.push({ id: m.category, label: m.category });
+      }
+    });
+    return list;
+  }, [votingSessions, mealOptions]);
 
   // Active Date string when filtering by today or custom date
   const effectiveDateStr = useMemo(() => {
@@ -500,16 +521,16 @@ export const RealtimeVotingCharts: React.FC<RealtimeVotingChartsProps> = ({
           <select
             value={selectedCategory}
             onChange={e => {
-              setSelectedCategory(e.target.value as any);
+              setSelectedCategory(e.target.value);
               setSelectedSessionId('all');
             }}
             className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <option value="Todas">Todas as Categorias</option>
-            <option value="Gremio">Grêmio Escolar</option>
-            <option value="Representante">Representante de Classe</option>
-            <option value="Alimentação">Alimentação / Merenda</option>
-            <option value="Outros">Outros Assuntos</option>
+            {dynamicCategories.map(cat => (
+              <option key={cat.id} value={cat.id}>
+                {cat.label}
+              </option>
+            ))}
           </select>
         </div>
 

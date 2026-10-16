@@ -30,6 +30,20 @@ export const StudentAttendanceManagement: React.FC<StudentAttendanceManagementPr
   const [selectedTurno, setSelectedTurno] = useState<string>('all');
   const [activeViewTab, setActiveViewTab] = useState<'all' | 'present' | 'absent'>('all');
 
+  const availableSalas = useMemo(() => {
+    const defaultList = ['1º Ano', '2º Ano', '3º Ano'];
+    const set = new Set<string>(defaultList);
+    students.forEach(s => s.sala && set.add(s.sala));
+    return Array.from(set);
+  }, [students]);
+
+  const availableTurnos = useMemo(() => {
+    const defaultList = ['Integral', 'Manhã', 'Tarde', 'Noite'];
+    const set = new Set<string>(defaultList);
+    students.forEach(s => s.turno && set.add(s.turno));
+    return Array.from(set);
+  }, [students]);
+
   // Currently selected present student matriculas for the selectedDate
   const [presentMatriculas, setPresentMatriculas] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -356,9 +370,9 @@ export const StudentAttendanceManagement: React.FC<StudentAttendanceManagementPr
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-xs"
                 >
                   <option value="all">Todas as Séries / Salas</option>
-                  <option value="1º Ano">1º Ano</option>
-                  <option value="2º Ano">2º Ano</option>
-                  <option value="3º Ano">3º Ano</option>
+                  {availableSalas.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
                 </select>
               </div>
 
@@ -369,10 +383,9 @@ export const StudentAttendanceManagement: React.FC<StudentAttendanceManagementPr
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-xs"
                 >
                   <option value="all">Todos os Turnos</option>
-                  <option value="Manhã">Manhã</option>
-                  <option value="Tarde">Tarde</option>
-                  <option value="Integral">Integral</option>
-                  <option value="Noite">Noite</option>
+                  {availableTurnos.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
                 </select>
               </div>
             </div>
