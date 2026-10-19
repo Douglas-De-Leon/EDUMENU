@@ -1,5 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { MealOption, VotingSession } from '../types';
+import { 
+  dbSaveCategory, 
+  dbDeleteCategory, 
+  dbClearAllCategories, 
+  dbFetchCategories 
+} from '../services/databaseService';
 
 interface VotingManagementProps {
   mealOptions: MealOption[];
@@ -26,21 +32,51 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   };
 
-  // Standard predefined categories
-  const standardCategories = ['Alimentação', 'Gremio', 'Representante', 'Outros'] as const;
+  // Dynamic user categories saved in localStorage and synced with Firestore
+  const [customCategories, setCustomCategories] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('voting_categories');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return [];
+  });
 
-  // Extract all existing categories dynamically from sessions and meal options
+  // Load categories from database Firestore on mount
+  useEffect(() => {
+    dbFetchCategories().then(dbCats => {
+      if (dbCats && dbCats.length > 0) {
+        setCustomCategories(prev => {
+          const union = Array.from(new Set([...prev, ...dbCats]));
+          try {
+            localStorage.setItem('voting_categories', JSON.stringify(union));
+          } catch (e) {}
+          return union;
+        });
+      }
+    }).catch(err => console.warn('Erro ao carregar categorias:', err));
+  }, []);
+
+  // Extract all available categories dynamically (NO forced standard categories!)
   const allAvailableCategories = useMemo(() => {
-    const set = new Set<string>(standardCategories);
+    const set = new Set<string>(customCategories);
     votingSessions.forEach(s => s.category && set.add(s.category));
     mealOptions.forEach(m => m.category && set.add(m.category));
-    return Array.from(set);
-  }, [votingSessions, mealOptions]);
+    return Array.from(set).filter(Boolean);
+  }, [customCategories, votingSessions, mealOptions]);
 
   // Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<string>('Alimentação');
+  const [category, setCategory] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('voting_categories');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+      }
+    } catch (e) {}
+    return '';
+  });
   const [isCreatingNewCategory, setIsCreatingNewCategory] = useState(false);
   const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [votingDate, setVotingDate] = useState<string>(getTodayStr);
@@ -49,6 +85,13 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
   const [formError, setFormError] = useState<string | null>(null);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>('all');
+
+  // Synchronize category selection if empty and categories become available
+  useEffect(() => {
+    if (!category && allAvailableCategories.length > 0) {
+      setCategory(allAvailableCategories[0]);
+    }
+  }, [allAvailableCategories, category]);
 
   // Inline Option Creation State (Permitir criar uma ou mais opções no mesmo cadastro!)
   const [showAddOptionForm, setShowAddOptionForm] = useState(false);
@@ -68,6 +111,7 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
 
   // Helper Labels & Colors
   const getCategoryLabel = (cat: string) => {
+    if (!cat) return 'Sem categoria';
     switch (cat) {
       case 'Gremio': return 'Grêmio Escolar';
       case 'Representante': return 'Representante de Classe';
@@ -89,6 +133,7 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
 
   // Filter ONLY items registered and enabled for the selected category
   const enabledOptionsForCategory = useMemo(() => {
+    if (!category) return [];
     return mealOptions.filter(m => m.category === category && m.active !== false);
   }, [mealOptions, category]);
 
@@ -104,13 +149,68 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
     setFormError(null);
   };
 
-  // Confirm custom category creation
-  const handleApplyCustomCategory = () => {
+  // Confirm custom category creation and save to database
+  const handleApplyCustomCategory = async () => {
     const trimmed = customCategoryInput.trim();
     if (!trimmed) return;
+
+    // Save to Firestore Database
+    try {
+      await dbSaveCategory(trimmed);
+    } catch (err) {
+      console.warn('Aviso ao salvar categoria no banco:', err);
+    }
+
+    // Save to Local State and LocalStorage
+    const updated = Array.from(new Set([...customCategories, trimmed]));
+    setCustomCategories(updated);
+    try {
+      localStorage.setItem('voting_categories', JSON.stringify(updated));
+    } catch (e) {}
+
     setCategory(trimmed);
     setIsCreatingNewCategory(false);
     setCustomCategoryInput('');
+    setFormError(null);
+  };
+
+  // Delete a single category from database and state
+  const handleDeleteCategory = async (catToDelete: string) => {
+    if (!catToDelete) return;
+    try {
+      await dbDeleteCategory(catToDelete);
+    } catch (err) {
+      console.warn('Aviso ao deletar categoria do banco:', err);
+    }
+
+    const updated = customCategories.filter(c => c !== catToDelete);
+    setCustomCategories(updated);
+    try {
+      localStorage.setItem('voting_categories', JSON.stringify(updated));
+    } catch (e) {}
+
+    const remaining = allAvailableCategories.filter(c => c !== catToDelete);
+    setCategory(remaining.length > 0 ? remaining[0] : '');
+  };
+
+  // Clear all categories from the database and storage
+  const handleClearAllCategories = async () => {
+    if (!window.confirm('Deseja realmente limpar as categorias do banco de dados? Você poderá criar novas a qualquer momento.')) {
+      return;
+    }
+    try {
+      await dbClearAllCategories();
+    } catch (err) {
+      console.warn('Aviso ao limpar categorias:', err);
+    }
+
+    setCustomCategories([]);
+    try {
+      localStorage.removeItem('voting_categories');
+    } catch (e) {}
+
+    setCategory('');
+    setIsCreatingNewCategory(true);
     setFormError(null);
   };
 
@@ -184,6 +284,10 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
     e.preventDefault();
     if (!votingDate) {
       setFormError('Por favor, selecione uma data específica para a votação.');
+      return;
+    }
+    if (!category.trim()) {
+      setFormError('Por favor, selecione ou cadastre uma categoria usando o botão "Adicionar nova categoria".');
       return;
     }
     if (selectedOptionIds.length === 0) {
@@ -417,46 +521,92 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
                 <label className="text-xs font-black text-slate-600 uppercase tracking-wider block">
                   1. Categoria da Votação
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setIsCreatingNewCategory(prev => !prev)}
-                  className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
-                >
-                  <i className={`fas ${isCreatingNewCategory ? 'fa-times' : 'fa-plus'}`}></i>
-                  {isCreatingNewCategory ? 'Escolher existente' : '+ Criar Categoria'}
-                </button>
+                <div className="flex items-center gap-2">
+                  {allAvailableCategories.length > 0 && !isCreatingNewCategory && (
+                    <button
+                      type="button"
+                      onClick={handleClearAllCategories}
+                      className="text-[10px] font-bold text-red-500 hover:text-red-700 transition-colors flex items-center gap-1"
+                      title="Limpar categorias do banco de dados"
+                    >
+                      <i className="fas fa-trash-alt text-[9px]"></i>
+                      Limpar Categorias
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingNewCategory(prev => !prev)}
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-indigo-50 transition-colors"
+                  >
+                    <i className={`fas ${isCreatingNewCategory ? 'fa-times' : 'fa-plus'}`}></i>
+                    <span>{isCreatingNewCategory ? 'Selecionar existente' : 'Adicionar nova categoria'}</span>
+                  </button>
+                </div>
               </div>
 
               {!isCreatingNewCategory ? (
-                <select
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800"
-                  value={category}
-                  onChange={e => handleCategoryChange(e.target.value)}
-                  required
-                >
-                  {allAvailableCategories.map(cat => (
-                    <option key={cat} value={cat}>
-                      {getCategoryLabel(cat)}
-                    </option>
-                  ))}
-                </select>
+                allAvailableCategories.length > 0 ? (
+                  <div className="flex gap-2">
+                    <select
+                      className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800"
+                      value={category}
+                      onChange={e => handleCategoryChange(e.target.value)}
+                      required
+                    >
+                      {allAvailableCategories.map(cat => (
+                        <option key={cat} value={cat}>
+                          {getCategoryLabel(cat)}
+                        </option>
+                      ))}
+                    </select>
+                    {category && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCategory(category)}
+                        title={`Excluir categoria "${category}" do banco de dados`}
+                        className="px-3 py-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-slate-200 shrink-0"
+                      >
+                        <i className="fas fa-trash-alt text-xs"></i>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-3 bg-indigo-50/60 border border-indigo-200 rounded-xl text-xs text-indigo-900 flex items-center justify-between">
+                    <span>Nenhuma categoria cadastrada.</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingNewCategory(true)}
+                      className="font-bold text-indigo-700 hover:text-indigo-900 flex items-center gap-1 ml-2 shrink-0 bg-white px-2.5 py-1 rounded-lg border border-indigo-200 shadow-2xs"
+                    >
+                      <i className="fas fa-plus"></i>
+                      <span>Adicionar nova categoria</span>
+                    </button>
+                  </div>
+                )
               ) : (
-                <div className="flex gap-2">
+                <div className="flex gap-2 animate-fadeIn">
                   <input
                     type="text"
                     value={customCategoryInput}
                     onChange={e => setCustomCategoryInput(e.target.value)}
-                    placeholder="Ex: Almoço Saudável, Projetos, etc..."
+                    placeholder="Nome da nova categoria (Ex: Almoço Saudável, Projetos...)"
                     className="flex-1 px-3.5 py-2.5 bg-white border border-indigo-300 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none shadow-xs"
                     autoFocus
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleApplyCustomCategory();
+                      }
+                    }}
                   />
                   <button
                     type="button"
                     onClick={handleApplyCustomCategory}
                     disabled={!customCategoryInput.trim()}
-                    className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-bold rounded-xl text-xs transition-colors shrink-0"
+                    className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-bold rounded-xl text-xs transition-colors shrink-0 flex items-center gap-1.5"
                   >
-                    Usar
+                    <i className="fas fa-check"></i>
+                    <span>Salvar</span>
                   </button>
                 </div>
               )}
@@ -516,7 +666,7 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm placeholder:text-slate-400 font-medium text-slate-800"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
-                placeholder={`Ex: Votação de ${getCategoryLabel(category)}`}
+                placeholder={category ? `Ex: Votação de ${getCategoryLabel(category)}` : 'Ex: Votação Escolar'}
               />
             </div>
 
@@ -538,7 +688,7 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
                   className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
                 >
                   <i className={`fas ${showAddOptionForm ? 'fa-minus' : 'fa-plus'}`}></i>
-                  <span>{showAddOptionForm ? 'Fechar Cadastro' : '+ Criar Opção Aqui'}</span>
+                  <span>{showAddOptionForm ? 'Fechar Cadastro' : 'Adicionar Opção na Cédula'}</span>
                 </button>
               </div>
 

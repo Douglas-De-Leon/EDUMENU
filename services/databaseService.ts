@@ -88,6 +88,54 @@ export async function dbSaveSelection(selection: Selection): Promise<Selection> 
   return selection;
 }
 
+// --- CATEGORIAS PERSONALIZADAS (/categories) ---
+export interface VotingCategory {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+export async function dbSaveCategory(name: string): Promise<string> {
+  const cleanName = name.trim();
+  const id = cleanName.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+  await setDoc(doc(db, 'categories', id), {
+    id,
+    name: cleanName,
+    createdAt: new Date().toISOString()
+  });
+  return cleanName;
+}
+
+export async function dbDeleteCategory(name: string): Promise<void> {
+  const id = name.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+  await deleteDoc(doc(db, 'categories', id));
+}
+
+export async function dbClearAllCategories(): Promise<void> {
+  try {
+    const snap = await getDocs(collection(db, 'categories'));
+    const promises = snap.docs.map(d => deleteDoc(d.ref));
+    await Promise.all(promises);
+  } catch (err) {
+    console.warn('Aviso ao limpar categorias do Firestore:', err);
+  }
+}
+
+export async function dbFetchCategories(): Promise<string[]> {
+  try {
+    const snap = await getDocs(collection(db, 'categories'));
+    const names: string[] = [];
+    snap.forEach(d => {
+      const data = d.data();
+      if (data && data.name) names.push(data.name);
+    });
+    return names;
+  } catch (e) {
+    console.warn('Erro ao carregar categorias do Firestore:', e);
+    return [];
+  }
+}
+
 // --- BUSCA GERAL DE TODAS AS INFORMAÇÕES SALVAS NO BANCO ---
 export interface AllDatabaseData {
   schools: School[];
@@ -211,21 +259,8 @@ export async function dbAutoInitIfEmpty(): Promise<boolean> {
         });
       }
 
-      // 4. Opções
-      for (const opt of MEAL_OPTIONS) {
-        await setDoc(doc(db, 'meals', opt.id), {
-          ...opt,
-          schoolId: 'escola-principal'
-        });
-      }
-
-      // 5. Sessões de votação
-      for (const sess of INITIAL_VOTING_SESSIONS) {
-        await setDoc(doc(db, 'voting_sessions', sess.id), {
-          ...sess,
-          schoolId: 'escola-principal'
-        });
-      }
+      // Mantém as categorias, opções e sessões de votação limpas no banco de dados para criação sob demanda do usuário
+      console.log('Banco de dados inicializado com sucesso (escolas, administradores e discentes).');
 
       console.log('Script de gravação inicial concluído com sucesso.');
       if (typeof window !== 'undefined') {

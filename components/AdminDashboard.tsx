@@ -1,14 +1,9 @@
-import React, { useState, useMemo } from 'react';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-  PieChart, Pie, Legend, AreaChart, Area
-} from 'recharts';
+import React, { useState } from 'react';
 import { Selection, MealOption, Student, VotingSession, AttendanceRecord } from '../types';
 import { VotingManagement } from './VotingManagement';
-import { VotingTrackingDashboard } from './VotingTrackingDashboard';
-import { StudentAttendanceManagement } from './StudentAttendanceManagement';
-import { RealtimeVotingCharts } from './RealtimeVotingCharts';
-import { CaseStudyIntelligenceDashboard } from './CaseStudyIntelligenceDashboard';
+import { IntelligentVotingDashboard } from './IntelligentVotingDashboard';
+import { IntelligentAttendanceDashboard } from './IntelligentAttendanceDashboard';
+import { IntelligentDecisionDashboard } from './IntelligentDecisionDashboard';
 
 interface AdminDashboardProps {
   selections: Selection[];
@@ -29,9 +24,9 @@ interface AdminDashboardProps {
   lastSync?: string | null;
 }
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
-  selections, 
-  mealOptions, 
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({
+  selections,
+  mealOptions,
   votingSessions = [],
   onAddMeal,
   onUpdateMeal,
@@ -47,876 +42,94 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   isSyncing = false,
   lastSync
 }) => {
-  // Tabs for managing votings, tracking, attendance, analytics or case studies
-  const [activeTab, setActiveTab] = useState<'votings' | 'tracking' | 'attendance' | 'analytics' | 'case_studies'>('votings');
-  
-  // Category filter for the results dashboard
-  const [selectedCategory, setSelectedCategory] = useState<string>('Alimentação');
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
-    const d = new Date();
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-  });
+  // Exatamente as 4 abas solicitadas pelo usuário:
+  // 1. Criar Votação ("DEIXE A ABA CRIAR VOTAÇÃO")
+  // 2. Dashboard Inteligente de Votações ("CRIE APENAS UM DASHBOARD INTELIGENTE PARA VOTAÇÕES.")
+  // 3. Dashboard Inteligente de Frequências ("CRIE APENAS UM DASHBOARD INTELIGENTE PARA AS FREQUÊNCIAS.")
+  // 4. Dashboard Inteligente para Tomada de Decisão ("CRIE APENAS UM DASHBOARD INTELIGENTEPARA TOMADA DE DECISÃO EM RELAÇÃO AS CATEGORIAS CRIADAS.")
+  const [activeTab, setActiveTab] = useState<'criar_votacao' | 'dashboard_votacoes' | 'dashboard_frequencias' | 'dashboard_decisao'>('criar_votacao');
 
-  // New option form state
-  const [newMeal, setNewMeal] = useState<Partial<MealOption>>({
-    category: 'Alimentação',
-    active: true
-  });
-  
-  const [mealToDelete, setMealToDelete] = useState<string | null>(null);
-  const [historySearch, setHistorySearch] = useState('');
-
-  // Auxiliary category labels
-  const getCategoryLabel = (cat: string) => {
-    switch (cat) {
-      case 'Gremio': return 'Grêmio Escolar';
-      case 'Representante': return 'Representante de Classe';
-      case 'Alimentação': return 'Alimentação / Merenda';
-      case 'Outros': return 'Outros Assuntos';
-      default: return cat;
-    }
-  };
-
-  const getCategoryThemeColor = (cat: string) => {
-    switch (cat) {
-      case 'Gremio': return '#4F46E5'; // Indigo
-      case 'Representante': return '#F59E0B'; // Amber
-      case 'Alimentação': return '#10B981'; // Emerald
-      case 'Outros': return '#8B5CF6'; // Violet
-      default: return '#0284C7';
-    }
-  };
-
-  const categoryOptions = useMemo(() => {
-    const list = ['Alimentação', 'Gremio', 'Representante', 'Outros'];
-    votingSessions.forEach(s => {
-      if (s.category && !list.includes(s.category)) list.push(s.category);
-    });
-    mealOptions.forEach(m => {
-      if (m.category && !list.includes(m.category)) list.push(m.category);
-    });
-    return list;
-  }, [votingSessions, mealOptions]);
-
-  // --- Calculations for the Selected Category ---
-  const currentCategoryStats = useMemo(() => {
-    // Filter options & selections for active category
-    const catOptions = mealOptions.filter(m => m.category === selectedCategory);
-    
-    // Parse selectedDate properly in local timezone to avoid UTC shifts
-    const [year, month, day] = selectedDate.split('-').map(Number);
-    const targetDate = new Date(year, month - 1, day);
-    const targetDateStr = targetDate.toLocaleDateString('pt-BR');
-
-    const catSelections = selections.filter(s => {
-      if (s.category !== selectedCategory) return false;
-      if (!s.timestamp) return false;
-      const voteDate = new Date(s.timestamp);
-      return voteDate.toLocaleDateString('pt-BR') === targetDateStr;
-    });
-
-    // Votes per Option/Candidate
-    const votesByOption = catOptions.map(option => {
-      const voteCount = catSelections.filter(s => s.mealId === option.id).length;
-      return {
-        id: option.id,
-        name: option.name,
-        identificador: option.calories || 'N/A',
-        count: voteCount,
-      };
-    }).sort((a, b) => b.count - a.count);
-
-    // Votes per Series (Série)
-    const series = ['1º Ano', '2º Ano', '3º Ano'] as const;
-    const votesBySerie = series.map(serie => {
-      const count = catSelections.filter(s => s.sala === serie).length;
-      return { name: serie, value: count };
-    });
-
-    // Votes per Class (Turma)
-    const seriesMap: Record<string, number> = {};
-    catSelections.forEach(s => {
-      const sName = (s.sala || 'Não definida') + (s.turma ? ` - Turma ${s.turma}` : '');
-      seriesMap[sName] = (seriesMap[sName] || 0) + 1;
-    });
-    const votesByClass = Object.entries(seriesMap).map(([name, count]) => ({
-      name,
-      votos: count
-    })).sort((a, b) => b.votos - a.votos);
-
-    // General Metrics
-    const totalVotes = catSelections.length;
-    const activeCandidatesCount = catOptions.filter(m => m.active).length;
-    const winningOption = votesByOption[0]?.count > 0 ? votesByOption[0] : null;
-    
-    // Voter turn-out participation percent
-    const participationRate = students.length > 0
-      ? ((totalVotes / students.length) * 100).toFixed(1)
-      : '0.0';
-
-    return {
-      votesByOption,
-      votesBySerie,
-      votesByClass,
-      totalVotes,
-      activeCandidatesCount,
-      winningOption,
-      participationRate
-    };
-  }, [selections, mealOptions, selectedCategory, students, selectedDate]);
-
-  // Daily Frequency of all Votes (General history trend)
-  const votesTrendData = useMemo(() => {
-    const dailyCounts: Record<string, number> = {};
-    selections.forEach(s => {
-      const dateStr = s.timestamp ? s.timestamp.split('T')[0] : 'Indefinido';
-      dailyCounts[dateStr] = (dailyCounts[dateStr] || 0) + 1;
-    });
-
-    return Object.entries(dailyCounts)
-      .map(([date, count]) => ({ date, count }))
-      .sort((a, b) => a.date.localeCompare(b.date));
-  }, [selections]);
-
-  // Overall statistics and temporal metrics
   const totalGlobalVotes = selections.length;
   const totalRegisteredStudents = students.length;
 
-  const temporalStats = useMemo(() => {
-    const now = new Date();
-    const todayStr = now.toLocaleDateString('pt-BR');
-    
-    // Start of the week (Sunday)
-    const currentDay = now.getDay();
-    const diff = now.getDate() - currentDay;
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(diff);
-    startOfWeek.setHours(0,0,0,0);
-
-    // Start of the month
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    
-    // Start of the year
-    const startOfYear = new Date(now.getFullYear(), 0, 1);
-
-    let votesToday = 0;
-    let votesWeek = 0;
-    let votesMonth = 0;
-    let votesYear = 0;
-
-    // Unique voters per period (could count unique matriculas, but assuming 1 vote per category per student, we will count total votes cast in period)
-    const uniqueVotersToday = new Set();
-    const uniqueVotersWeek = new Set();
-    const uniqueVotersMonth = new Set();
-    const uniqueVotersYear = new Set();
-
-    let catVotesToday = 0;
-    let catVotesWeek = 0;
-    let catVotesMonth = 0;
-    let catVotesYear = 0;
-
-    const catUniqueVotersToday = new Set();
-    const catUniqueVotersWeek = new Set();
-    const catUniqueVotersMonth = new Set();
-    const catUniqueVotersYear = new Set();
-
-    selections.forEach(s => {
-      const voteDate = new Date(s.timestamp);
-      const isToday = voteDate.toLocaleDateString('pt-BR') === todayStr;
-      const isWeek = voteDate >= startOfWeek;
-      const isMonth = voteDate >= startOfMonth;
-      const isYear = voteDate >= startOfYear;
-      const isCategory = s.category === selectedCategory;
-      
-      if (isToday) {
-        votesToday++;
-        uniqueVotersToday.add(s.matricula);
-        if (isCategory) {
-          catVotesToday++;
-          catUniqueVotersToday.add(s.matricula);
-        }
-      }
-      if (isWeek) {
-        votesWeek++;
-        uniqueVotersWeek.add(s.matricula);
-        if (isCategory) {
-          catVotesWeek++;
-          catUniqueVotersWeek.add(s.matricula);
-        }
-      }
-      if (isMonth) {
-        votesMonth++;
-        uniqueVotersMonth.add(s.matricula);
-        if (isCategory) {
-          catVotesMonth++;
-          catUniqueVotersMonth.add(s.matricula);
-        }
-      }
-      if (isYear) {
-        votesYear++;
-        uniqueVotersYear.add(s.matricula);
-        if (isCategory) {
-          catVotesYear++;
-          catUniqueVotersYear.add(s.matricula);
-        }
-      }
-    });
-
-    return {
-      votesToday, catVotesToday,
-      uniqueVotersToday: uniqueVotersToday.size,
-      catUniqueVotersToday: catUniqueVotersToday.size,
-      votesWeek, catVotesWeek,
-      uniqueVotersWeek: uniqueVotersWeek.size,
-      catUniqueVotersWeek: catUniqueVotersWeek.size,
-      votesMonth, catVotesMonth,
-      uniqueVotersMonth: uniqueVotersMonth.size,
-      catUniqueVotersMonth: catUniqueVotersMonth.size,
-      votesYear, catVotesYear,
-      uniqueVotersYear: uniqueVotersYear.size,
-      catUniqueVotersYear: catUniqueVotersYear.size,
-    };
-  }, [selections, selectedCategory]);
-
-  const handleAddMealSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMeal.name || !newMeal.description) return;
-    
-    const mealToAdd: MealOption = {
-      id: 'opt_' + Date.now().toString() + '_' + Math.random().toString(36).substring(2, 7),
-      name: newMeal.name,
-      description: newMeal.description,
-      category: newMeal.category as any,
-      calories: newMeal.calories || 'N/A',
-      active: true
-    };
-
-    onAddMeal(mealToAdd);
-    setNewMeal({ category: selectedCategory, active: true, name: '', description: '', calories: '' });
-  };
-
-  const toggleMealStatus = (id: string) => {
-    const targetMeal = mealOptions.find(m => m.id === id);
-    if (targetMeal) {
-      onUpdateMeal({ ...targetMeal, active: !targetMeal.active });
-    }
-  };
-
-  const confirmDeleteMeal = (id: string) => {
-    setMealToDelete(id);
-  };
-
-  const executeDeleteMeal = () => {
-    if (mealToDelete) {
-      onDeleteMeal(mealToDelete);
-      setMealToDelete(null);
-    }
-  };
-
-  const currentCategoryVotersList = useMemo(() => {
-    return selections
-      .filter(s => s.category === selectedCategory)
-      .map(s => {
-        const studentInfo = students.find(stud => stud.matricula === s.matricula);
-        const optionInfo = mealOptions.find(o => o.id === s.mealId);
-        return {
-          id: s.matricula + '_' + s.timestamp,
-          matricula: s.matricula,
-          studentName: studentInfo ? studentInfo.name : 'Aluno Removido',
-          sala: s.sala || (studentInfo ? studentInfo.sala : 'N/A'),
-          turma: s.turma || (studentInfo ? studentInfo.turma : 'N/A'),
-          turno: s.turno || (studentInfo ? studentInfo.turno : 'N/A'),
-          votedFor: optionInfo ? optionInfo.name : 'Opção Removida',
-          category: s.category,
-          timestamp: s.timestamp
-        };
-      })
-      .filter(item => 
-        item.studentName.toLowerCase().includes(historySearch.toLowerCase()) ||
-        item.votedFor.toLowerCase().includes(historySearch.toLowerCase()) ||
-        item.matricula.includes(historySearch) ||
-        item.sala.toLowerCase().includes(historySearch.toLowerCase()) ||
-        (item.turma && item.turma.toLowerCase().includes(historySearch.toLowerCase()))
-      )
-      .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-  }, [selections, mealOptions, selectedCategory, students, historySearch]);
-
-  const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
-
   return (
     <div className="space-y-8 animate-fadeIn">
-      {/* Delete Option Modal */}
-      {mealToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full mx-4 border border-slate-100">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600">
-                <i className="fas fa-trash-alt text-2xl"></i>
-              </div>
-              <h3 className="text-xl font-bold text-slate-800 mb-2">Excluir Permanente?</h3>
-              <p className="text-slate-500 text-sm leading-relaxed">
-                Esta ação apagará esta opção de voto/candidato. Votos vinculados a este identificador podem aparecer desvinculados.
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <button 
-                onClick={() => setMealToDelete(null)}
-                className="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors"
-              >
-                Voltar
-              </button>
-              <button 
-                onClick={executeDeleteMeal}
-                className="flex-1 px-4 py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition-colors shadow-lg shadow-red-500/20"
-              >
-                Excluir
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Admin Tab Controller Bar */}
+      {/* Barra de Navegação Exclusiva das 4 Abas Oficiais */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-slate-50 p-2 rounded-2xl border border-slate-200/60 shadow-inner">
         <div className="flex flex-wrap gap-2 w-full lg:w-auto">
-          <button 
-            onClick={() => setActiveTab('votings')}
+          {/* Aba 1: Criar Votação */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('criar_votacao')}
             className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-              activeTab === 'votings' 
-                ? 'bg-white shadow-sm text-indigo-700 font-black' 
+              activeTab === 'criar_votacao'
+                ? 'bg-white shadow-sm text-indigo-700 font-black ring-1 ring-slate-200'
                 : 'text-slate-600 hover:text-slate-800'
             }`}
           >
-            <i className="fas fa-calendar-plus"></i>
-            Criar Votação
+            <i className="fas fa-calendar-plus text-indigo-600"></i>
+            <span>Criar Votação</span>
             {votingSessions.length > 0 && (
               <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-bold">
                 {votingSessions.length}
               </span>
             )}
           </button>
-          <button 
-            onClick={() => setActiveTab('tracking')}
+
+          {/* Aba 2: Dashboard Inteligente de Votações */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('dashboard_votacoes')}
             className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-              activeTab === 'tracking' 
-                ? 'bg-white shadow-sm text-indigo-700 font-black' 
+              activeTab === 'dashboard_votacoes'
+                ? 'bg-white shadow-sm text-indigo-700 font-black ring-1 ring-slate-200'
                 : 'text-slate-600 hover:text-slate-800'
             }`}
           >
-            <i className="fas fa-chart-line text-indigo-600"></i>
-            Acompanhamento do Dia & Histórico
+            <i className="fas fa-chart-pie text-indigo-600"></i>
+            <span>Dashboard Inteligente de Votações</span>
           </button>
-          <button 
-            onClick={() => setActiveTab('attendance')}
+
+          {/* Aba 3: Dashboard Inteligente de Frequências */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('dashboard_frequencias')}
             className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-              activeTab === 'attendance' 
-                ? 'bg-white shadow-sm text-emerald-700 font-black' 
+              activeTab === 'dashboard_frequencias'
+                ? 'bg-white shadow-sm text-emerald-700 font-black ring-1 ring-slate-200'
                 : 'text-slate-600 hover:text-slate-800'
             }`}
           >
             <i className="fas fa-user-check text-emerald-600"></i>
-            Frequência de Alunos
+            <span>Dashboard Inteligente de Frequências</span>
           </button>
-          <button 
-            onClick={() => setActiveTab('analytics')}
+
+          {/* Aba 4: Dashboard Inteligente para Tomada de Decisão */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('dashboard_decisao')}
             className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-              activeTab === 'analytics' 
-                ? 'bg-white shadow-sm text-indigo-700 font-black' 
-                : 'text-slate-600 hover:text-slate-800'
-            }`}
-          >
-            <i className="fas fa-chart-pie"></i>
-            Apuração Geral
-          </button>
-          <button 
-            onClick={() => setActiveTab('case_studies')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-              activeTab === 'case_studies' 
-                ? 'bg-white shadow-sm text-purple-700 font-black ring-2 ring-purple-400/30' 
+              activeTab === 'dashboard_decisao'
+                ? 'bg-white shadow-sm text-purple-700 font-black ring-2 ring-purple-400/40'
                 : 'text-purple-700 hover:text-purple-900 bg-purple-50/60 font-extrabold'
             }`}
           >
             <i className="fas fa-brain text-purple-600"></i>
-            Estudos de Casos & Inteligência
+            <span>Dashboard Inteligente para Tomada de Decisão</span>
           </button>
         </div>
-        <div className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 flex items-center gap-2 self-end lg:self-auto font-mono tabular-nums">
-          <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping"></span>
-          <span>{totalGlobalVotes} votos totais de {totalRegisteredStudents} estudantes</span>
+
+        {/* Status rápido de quórum */}
+        <div className="text-xs font-bold text-slate-500 bg-white px-3 py-1.5 rounded-lg border border-slate-200 flex items-center gap-2 self-end lg:self-auto font-mono tabular-nums shadow-2xs">
+          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span>
+          <span>{totalGlobalVotes} votos apurados / {totalRegisteredStudents} estudantes</span>
         </div>
       </div>
 
-      {activeTab === 'analytics' && (
-        <div className="space-y-8">
-          <RealtimeVotingCharts
-            selections={selections}
-            mealOptions={mealOptions}
-            votingSessions={votingSessions}
-            students={students}
-            attendanceRecords={attendanceRecords}
-            lastSync={lastSync}
-            onRefresh={onSyncDatabase}
-            isSyncing={isSyncing}
-          />
+      {/* RENDERIZAÇÃO EXCLUSIVA DE CADA UMA DAS 4 ABAS */}
 
-          {/* Category Temporal Metrics Row */}
-          <div className="space-y-2">
-            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-              <i className="fas fa-chart-pie"></i> Engajamento da Categoria ({getCategoryLabel(selectedCategory)})
-            </h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-gradient-to-br from-indigo-500 to-blue-600 p-5 rounded-2xl text-white shadow-md relative overflow-hidden flex flex-col justify-between">
-                <i className="fas fa-calendar-day absolute -bottom-2 -right-2 text-6xl opacity-10"></i>
-                <p className="text-xs font-black uppercase tracking-widest text-indigo-100 mb-1">Hoje</p>
-                <div>
-                  <div className="flex items-end gap-2 mb-1">
-                    <span className="text-3xl font-extrabold">{temporalStats.catVotesToday}</span>
-                    <span className="text-xs font-medium text-indigo-100 mb-1.5 uppercase tracking-wide">Votos na Categoria</span>
-                  </div>
-                  <p className="text-xs font-medium text-indigo-100 bg-black/10 inline-block px-2 py-0.5 rounded-full mb-3">
-                    {temporalStats.catUniqueVotersToday} alunos
-                  </p>
-                  <div className="border-t border-white/20 pt-2 flex justify-between items-center text-sm">
-                    <span className="font-medium text-indigo-100">Votos Globais (Todas):</span>
-                    <span className="font-bold">{temporalStats.votesToday}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-5 rounded-2xl text-white shadow-md relative overflow-hidden flex flex-col justify-between">
-                <i className="fas fa-calendar-week absolute -bottom-2 -right-2 text-6xl opacity-10"></i>
-                <p className="text-xs font-black uppercase tracking-widest text-emerald-100 mb-1">Na Semana</p>
-                <div>
-                  <div className="flex items-end gap-2 mb-1">
-                    <span className="text-3xl font-extrabold">{temporalStats.catVotesWeek}</span>
-                    <span className="text-xs font-medium text-emerald-100 mb-1.5 uppercase tracking-wide">Votos na Categoria</span>
-                  </div>
-                  <p className="text-xs font-medium text-emerald-100 bg-black/10 inline-block px-2 py-0.5 rounded-full mb-3">
-                    {temporalStats.catUniqueVotersWeek} alunos
-                  </p>
-                  <div className="border-t border-white/20 pt-2 flex justify-between items-center text-sm">
-                    <span className="font-medium text-emerald-100">Votos Globais (Todas):</span>
-                    <span className="font-bold">{temporalStats.votesWeek}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-5 rounded-2xl text-white shadow-md relative overflow-hidden flex flex-col justify-between">
-                <i className="fas fa-calendar-alt absolute -bottom-2 -right-2 text-6xl opacity-10"></i>
-                <p className="text-xs font-black uppercase tracking-widest text-amber-100 mb-1">No Mês</p>
-                <div>
-                  <div className="flex items-end gap-2 mb-1">
-                    <span className="text-3xl font-extrabold">{temporalStats.catVotesMonth}</span>
-                    <span className="text-xs font-medium text-amber-100 mb-1.5 uppercase tracking-wide">Votos na Categoria</span>
-                  </div>
-                  <p className="text-xs font-medium text-amber-100 bg-black/10 inline-block px-2 py-0.5 rounded-full mb-3">
-                    {temporalStats.catUniqueVotersMonth} alunos
-                  </p>
-                  <div className="border-t border-white/20 pt-2 flex justify-between items-center text-sm">
-                    <span className="font-medium text-amber-100">Votos Globais (Todas):</span>
-                    <span className="font-bold">{temporalStats.votesMonth}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-br from-purple-500 to-pink-600 p-5 rounded-2xl text-white shadow-md relative overflow-hidden flex flex-col justify-between">
-                <i className="fas fa-calendar absolute -bottom-2 -right-2 text-6xl opacity-10"></i>
-                <p className="text-xs font-black uppercase tracking-widest text-purple-100 mb-1">No Ano</p>
-                <div>
-                  <div className="flex items-end gap-2 mb-1">
-                    <span className="text-3xl font-extrabold">{temporalStats.catVotesYear}</span>
-                    <span className="text-xs font-medium text-purple-100 mb-1.5 uppercase tracking-wide">Votos na Categoria</span>
-                  </div>
-                  <p className="text-xs font-medium text-purple-100 bg-black/10 inline-block px-2 py-0.5 rounded-full mb-3">
-                    {temporalStats.catUniqueVotersYear} alunos
-                  </p>
-                  <div className="border-t border-white/20 pt-2 flex justify-between items-center text-sm">
-                    <span className="font-medium text-purple-100">Votos Globais (Todas):</span>
-                    <span className="font-bold">{temporalStats.votesYear}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Filters: Category and Date */}
-          <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6">
-            <div className="space-y-2 flex-1 w-full">
-              <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Filtrar Apuração por Categoria</h4>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {categoryOptions.map((cat) => {
-                const isActive = selectedCategory === cat;
-                const themeColor = getCategoryThemeColor(cat);
-                
-                const [year, month, day] = selectedDate.split('-').map(Number);
-                const targetDate = new Date(year, month - 1, day);
-                const targetDateStr = targetDate.toLocaleDateString('pt-BR');
-                
-                const votesCount = selections.filter(s => {
-                  if (s.category !== cat) return false;
-                  if (!s.timestamp) return false;
-                  return new Date(s.timestamp).toLocaleDateString('pt-BR') === targetDateStr;
-                }).length;
-                
-                return (
-                  <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
-                    style={{ borderColor: isActive ? themeColor : undefined }}
-                    className={`p-4 rounded-2xl border-2 text-left transition-all ${
-                      isActive 
-                        ? 'bg-white ring-4 ring-indigo-500/5' 
-                        : 'bg-white hover:bg-slate-50 border-slate-100'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${
-                        cat === 'Gremio' ? 'bg-indigo-50 text-indigo-600' :
-                        cat === 'Representante' ? 'bg-amber-50 text-amber-600' :
-                        cat === 'Alimentação' ? 'bg-emerald-50 text-emerald-600' : 'bg-purple-50 text-purple-600'
-                      }`}>
-                        <i className={`fas ${
-                          cat === 'Gremio' ? 'fa-id-badge' :
-                          cat === 'Representante' ? 'fa-user-friends' :
-                          cat === 'Alimentação' ? 'fa-apple-alt' : 'fa-clipboard-list'
-                        }`}></i>
-                      </span>
-                      <span className="text-xs font-bold text-slate-400 font-mono">
-                        {votesCount} {votesCount === 1 ? 'voto' : 'votos'}
-                      </span>
-                    </div>
-                    <span className="block font-black text-slate-800 text-sm leading-tight">
-                      {getCategoryLabel(cat)}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            </div>
-
-            <div className="space-y-2 w-full xl:w-64 shrink-0">
-              <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Data da Apuração</h4>
-              <div className="bg-white border-2 border-slate-100 rounded-2xl p-4 flex items-center gap-3 transition-all focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-500/10">
-                <i className="fas fa-calendar-alt text-slate-400"></i>
-                <input 
-                  type="date" 
-                  value={selectedDate} 
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="bg-transparent border-none outline-none text-sm font-bold text-slate-700 w-full cursor-pointer"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Metrics Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between">
-              <div>
-                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Participação na Categoria</p>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-extrabold text-slate-800">{currentCategoryStats.participationRate}%</span>
-                </div>
-              </div>
-              <div className="h-1 bg-slate-100 rounded-full overflow-hidden mt-3">
-                <div 
-                  className="h-full bg-indigo-600 rounded-full transition-all duration-500" 
-                  style={{ width: `${Math.min(100, parseFloat(currentCategoryStats.participationRate))}%` }}
-                ></div>
-              </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Votos Registrados</p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-slate-800">{currentCategoryStats.totalVotes}</span>
-                <span className="text-slate-400 text-xs font-medium">de {totalRegisteredStudents} alunos</span>
-              </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Opções Habilitadas</p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-slate-800">{currentCategoryStats.activeCandidatesCount}</span>
-                <span className="text-slate-400 text-xs font-medium">candidatos ativos</span>
-              </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm" style={{ borderLeft: `4px solid ${getCategoryThemeColor(selectedCategory)}` }}>
-              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Líder Atual</p>
-              <p className="text-lg font-bold text-slate-800 truncate">
-                {currentCategoryStats.winningOption ? currentCategoryStats.winningOption.name : 'Nenhum voto'}
-              </p>
-              <p className="text-xs text-indigo-600 font-bold mt-1 font-mono">
-                {currentCategoryStats.winningOption ? `${currentCategoryStats.winningOption.count} votos (${((currentCategoryStats.winningOption.count / (currentCategoryStats.totalVotes || 1)) * 100).toFixed(0)}%)` : '-'}
-              </p>
-            </div>
-          </div>
-
-          {/* Graphical Analytics Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            {/* Main Bar Chart: Candidates distribution */}
-            <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-800">Resultado das Urnas</h3>
-                  <p className="text-xs text-slate-400">Distribuição quantitativa de votos para {getCategoryLabel(selectedCategory)}</p>
-                </div>
-                <span className="bg-indigo-50 text-indigo-600 font-bold text-xs p-1 px-2.5 rounded-full uppercase tracking-wider">Tempo Real</span>
-              </div>
-              <div className="h-72 w-full pt-4">
-                {currentCategoryStats.votesByOption.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={currentCategoryStats.votesByOption} layout="vertical" margin={{ left: 10, right: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} vertical={true} stroke="#f1f5f9" />
-                      <XAxis type="number" scale="linear" allowDecimals={false} stroke="#94a3b8" fontSize={10} axisLine={false} tickLine={false} />
-                      <YAxis 
-                        dataKey="name" 
-                        type="category" 
-                        width={90} 
-                        fontSize={10} 
-                        tick={{ fill: '#475569', fontWeight: 'bold' }} 
-                        axisLine={false} 
-                        tickLine={false} 
-                      />
-                      <Tooltip 
-                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
-                        formatter={(val: any) => [`${val} votos`, 'Contagem']}
-                      />
-                      <Bar dataKey="count" radius={[0, 8, 8, 0]} barSize={24}>
-                        {currentCategoryStats.votesByOption.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                    <i className="fas fa-box-open text-4xl mb-2"></i>
-                    <p className="text-sm">Nenhuma opção cadastrada nesta categoria.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Series Breakdown (Séries) */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4 flex flex-col justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-slate-800">Participação por Série</h3>
-                <p className="text-xs text-slate-400">Comparação de engajamento por ano</p>
-              </div>
-
-              <div className="h-48 w-full flex items-center justify-center">
-                {currentCategoryStats.totalVotes > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={currentCategoryStats.votesBySerie}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {currentCategoryStats.votesBySerie.map((entry, index) => {
-                          const serieColors: Record<string, string> = { '1º Ano': '#0EA5E9', '2º Ano': '#F43F5E', '3º Ano': '#6366F1' };
-                          return <Cell key={`cell-${index}`} fill={serieColors[entry.name] || COLORS[index]} />;
-                        })}
-                      </Pie>
-                      <Tooltip formatter={(val: any) => [`${val} votos`]} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="text-center text-slate-400 py-10">
-                    <i className="fas fa-history text-3xl mb-2"></i>
-                    <p className="text-xs">Nenhum voto computado ainda</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-around border-t border-slate-50 pt-4">
-                {currentCategoryStats.votesBySerie.map((entry, idx) => {
-                  const serieColorsText: Record<string, string> = { '1º Ano': 'text-sky-500', '2º Ano': 'text-rose-500', '3º Ano': 'text-indigo-500' };
-                  const percent = currentCategoryStats.totalVotes > 0 
-                    ? ((entry.value / currentCategoryStats.totalVotes) * 100).toFixed(0) 
-                    : 0;
-                  return (
-                    <div key={entry.name} className="text-center">
-                      <p className="text-xs text-slate-400 font-bold">{entry.name}</p>
-                      <p className={`text-sm font-black ${serieColorsText[entry.name]}`}>{percent}%</p>
-                      <span className="text-[10px] text-slate-400 font-mono">({entry.value} v)</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Class Breakdown (Séries) */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="md:col-span-1 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
-              <div>
-                <h3 className="text-lg font-bold text-slate-800">Ranking por Turmas</h3>
-                <p className="text-xs text-slate-400">As turmas com maior índice de votos participativos</p>
-              </div>
-              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-                {currentCategoryStats.votesByClass.length > 0 ? (
-                  currentCategoryStats.votesByClass.map((sala, idx) => {
-                    const totalPot = currentCategoryStats.totalVotes || 1;
-                    const percent = ((sala.votos / totalPot) * 100).toFixed(0);
-                    return (
-                      <div key={sala.name} className="space-y-1">
-                        <div className="flex justify-between text-xs font-bold text-slate-700">
-                          <span>{sala.name}</span>
-                          <span>{sala.votos} votos ({percent}%)</span>
-                        </div>
-                        <div className="h-2 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
-                          <div 
-                            className="h-full rounded-full" 
-                            style={{ 
-                              width: `${percent}%`,
-                              backgroundColor: COLORS[idx % COLORS.length]
-                            }}
-                          ></div>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="text-center text-slate-400 py-12">
-                    <p className="text-sm">Aguardando votos das séries.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* General historical voting frequency tracker */}
-            <div className="md:col-span-2 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-4">
-              <div>
-                <h3 className="text-lg font-bold text-slate-800">Frequência Histórica (Série Temporal)</h3>
-                <p className="text-xs text-slate-400">Total de votos diários monitorados pelo sistema</p>
-              </div>
-              <div className="h-56 w-full pt-2">
-                {votesTrendData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={votesTrendData}>
-                      <defs>
-                        <linearGradient id="gradientVotes" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.2}/>
-                          <stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="date" fontSize={9} tick={{ fill: '#64748b' }} axisLine={false} />
-                      <YAxis fontSize={9} tick={{ fill: '#64748b' }} axisLine={false} />
-                      <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 8px 16px -4px rgba(0,0,0,0.1)' }} />
-                      <Area type="monotone" dataKey="count" stroke="#4F46E5" strokeWidth={3} fillOpacity={1} fill="url(#gradientVotes)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex items-center justify-center h-full text-slate-400 text-sm">
-                    Histórico vazio. Registre votos para popular a série temporal.
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Detailed audit list / Histórico de Votos */}
-          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div>
-                <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                  <i className="fas fa-history text-indigo-500"></i>
-                  Auditoria / Log Histórico de Votos
-                </h3>
-                <p className="text-xs text-slate-400">Lista cronológica dos votos apurados na categoria selecionada</p>
-              </div>
-              <div className="relative w-full sm:w-80">
-                <i className="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                <input 
-                  type="text" 
-                  placeholder="Buscar por aluno, série ou candidato..." 
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs"
-                  value={historySearch}
-                  onChange={e => setHistorySearch(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="overflow-x-auto rounded-2xl border border-slate-150">
-              <table className="w-full text-left border-collapse min-w-[700px]">
-                <thead className="bg-slate-50 text-slate-500 uppercase font-bold text-[10px] tracking-wider">
-                  <tr>
-                    <th className="p-4">Matrícula</th>
-                    <th className="p-4">Estudante</th>
-                    <th className="p-4">Série</th>
-                    <th className="p-4">Turma</th>
-                    <th className="p-4">Turno</th>
-                    <th className="p-4">Candidato / Prato Escolhido</th>
-                    <th className="p-4">Carimbo de Data</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
-                  {currentCategoryVotersList.length > 0 ? (
-                    currentCategoryVotersList.map(vote => (
-                      <tr key={vote.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="p-4 font-mono text-xs">{vote.matricula}</td>
-                        <td className="p-4 font-bold text-slate-800">{vote.studentName}</td>
-                        <td className="p-4 text-slate-600 font-semibold">{vote.sala}</td>
-                        <td className="p-4 text-slate-600 font-semibold">{vote.turma || 'N/A'}</td>
-                        <td className="p-4">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            vote.turno === 'Manhã' ? 'bg-sky-100 text-sky-700' :
-                            vote.turno === 'Tarde' ? 'bg-rose-100 text-rose-700' :
-                            'bg-indigo-100 text-indigo-700'
-                          }`}>
-                            {vote.turno}
-                          </span>
-                        </td>
-                        <td className="p-4 font-medium text-slate-900 border-l-2" style={{ borderLeftColor: getCategoryThemeColor(selectedCategory) }}>
-                          {vote.votedFor}
-                        </td>
-                        <td className="p-4 text-xs font-mono text-slate-400">
-                          {new Date(vote.timestamp).toLocaleDateString('pt-BR')} {new Date(vote.timestamp).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={6} className="p-8 text-center text-slate-400">
-                        Nenhum registro de voto encontrado para a busca atual.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'tracking' && (
-        <VotingTrackingDashboard
-          selections={selections}
-          mealOptions={mealOptions}
-          votingSessions={votingSessions}
-          students={students}
-          attendanceRecords={attendanceRecords}
-        />
-      )}
-
-      {activeTab === 'attendance' && (
-        <StudentAttendanceManagement
-          students={students}
-          attendanceRecords={attendanceRecords}
-          onSaveAttendance={onSaveAttendance || (async () => {})}
-          currentSchoolId={currentSchoolId}
-        />
-      )}
-
-      {activeTab === 'votings' && (
+      {/* 1. Criar Votação */}
+      {activeTab === 'criar_votacao' && (
         <VotingManagement
           mealOptions={mealOptions}
           votingSessions={votingSessions}
@@ -927,14 +140,40 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         />
       )}
 
-      {activeTab === 'case_studies' && (
-        <CaseStudyIntelligenceDashboard
+      {/* 2. Dashboard Inteligente de Votações */}
+      {activeTab === 'dashboard_votacoes' && (
+        <IntelligentVotingDashboard
           selections={selections}
           mealOptions={mealOptions}
           votingSessions={votingSessions}
           students={students}
           attendanceRecords={attendanceRecords}
-          onNavigateToVoting={() => setActiveTab('votings')}
+          lastSync={lastSync}
+          onRefresh={onSyncDatabase}
+          isSyncing={isSyncing}
+        />
+      )}
+
+      {/* 3. Dashboard Inteligente de Frequências */}
+      {activeTab === 'dashboard_frequencias' && (
+        <IntelligentAttendanceDashboard
+          students={students}
+          attendanceRecords={attendanceRecords}
+          onSaveAttendance={onSaveAttendance || (async () => {})}
+          selections={selections}
+          currentSchoolId={currentSchoolId}
+        />
+      )}
+
+      {/* 4. Dashboard Inteligente para Tomada de Decisão */}
+      {activeTab === 'dashboard_decisao' && (
+        <IntelligentDecisionDashboard
+          selections={selections}
+          mealOptions={mealOptions}
+          votingSessions={votingSessions}
+          students={students}
+          attendanceRecords={attendanceRecords}
+          onNavigateToVoting={() => setActiveTab('criar_votacao')}
           onReuseVoting={(session, targetDate) => {
             if (onAddVotingSession) {
               const [y, m, d] = targetDate.split('-').map(Number);
@@ -951,7 +190,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 createdAt: new Date().toISOString()
               };
               onAddVotingSession(newSession);
-              setActiveTab('votings');
+              setActiveTab('criar_votacao');
             }
           }}
         />

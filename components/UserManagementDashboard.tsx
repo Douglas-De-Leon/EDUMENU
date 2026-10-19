@@ -310,7 +310,7 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
                     className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-colors"
                   >
                     <i className={`fas ${isCreatingSerie ? 'fa-times' : 'fa-plus'}`}></i>
-                    {isCreatingSerie ? 'Cancelar' : '+ Criar Série'}
+                    {isCreatingSerie ? 'Cancelar' : 'Criar Série'}
                   </button>
                 </div>
 
@@ -362,7 +362,7 @@ export const UserManagementDashboard: React.FC<UserManagementDashboardProps> = (
                     className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-colors"
                   >
                     <i className={`fas ${isCreatingTurno ? 'fa-times' : 'fa-plus'}`}></i>
-                    {isCreatingTurno ? 'Cancelar' : '+ Criar Turno'}
+                    {isCreatingTurno ? 'Cancelar' : 'Criar Turno'}
                   </button>
                 </div>
 

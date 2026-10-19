@@ -203,36 +203,14 @@ const App: React.FC = () => {
         await setDoc(doc(db, 'students', st.matricula), studentToSave);
       }
 
-      // 4. Rota de Opções/Candidatos (/meals)
-      for (const opt of MEAL_OPTIONS) {
-        const optToSave: MealOption = {
-          ...opt,
-          schoolId: 'escola-principal'
-        };
-        await setDoc(doc(db, 'meals', opt.id), optToSave);
-      }
-
-      // 5. Rota de Sessões de Votação (/voting_sessions)
-      for (const sess of INITIAL_VOTING_SESSIONS) {
-        const sessToSave: VotingSession = {
-          ...sess,
-          schoolId: 'escola-principal'
-        };
-        await setDoc(doc(db, 'voting_sessions', sess.id), sessToSave);
-      }
-
-      // Atualiza estado local e cache
+      // Mantém categorias e sessões de votação limpas no banco para serem criadas pelo gestor
       setSchools([defaultSchool]);
       setAdminUsers(defaultAdmins);
       setRegisteredStudents(INITIAL_STUDENTS.map(s => ({ ...s, schoolId: 'escola-principal' })));
-      setMealOptions(MEAL_OPTIONS.map(m => ({ ...m, schoolId: 'escola-principal' })));
-      setVotingSessions(INITIAL_VOTING_SESSIONS.map(v => ({ ...v, schoolId: 'escola-principal' })));
 
       setCachedData(CACHE_KEYS.SCHOOLS, [defaultSchool]);
       setCachedData(CACHE_KEYS.ADMINS, defaultAdmins);
       setCachedData(CACHE_KEYS.STUDENTS, INITIAL_STUDENTS.map(s => ({ ...s, schoolId: 'escola-principal' })));
-      setCachedData(CACHE_KEYS.MEALS, MEAL_OPTIONS.map(m => ({ ...m, schoolId: 'escola-principal' })));
-      setCachedData(CACHE_KEYS.SESSIONS, INITIAL_VOTING_SESSIONS.map(v => ({ ...v, schoolId: 'escola-principal' })));
 
       const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       setLastSync(nowTime);
