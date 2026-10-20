@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Student, VotingSession, MealOption, Selection, AttendanceRecord } from '../types';
+import { StudentProfileModal } from './StudentProfileModal';
 
 interface StudentVotingDashboardProps {
   currentStudent: Student;
@@ -12,6 +13,7 @@ interface StudentVotingDashboardProps {
   onRefresh?: () => Promise<void> | void;
   onCastVote: (session: VotingSession, optionId: string) => Promise<void> | void;
   onLogout: () => void;
+  onUpdateStudent?: (student: Student) => Promise<void> | void;
 }
 
 export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
@@ -24,7 +26,8 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
   lastSyncTime = null,
   onRefresh,
   onCastVote,
-  onLogout
+  onLogout,
+  onUpdateStudent
 }) => {
   // Navigation state: null shows all registered votings, string shows specific ballot
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
@@ -36,6 +39,7 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [justVotedSessionId, setJustVotedSessionId] = useState<string | null>(null);
   const [receiptSession, setReceiptSession] = useState<VotingSession | null>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   // Play audio feedbacks (electronic urn simulation)
   const playBeep = () => {
@@ -263,8 +267,19 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
       {/* Student Profile & System Status Header */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div className="flex items-center gap-5">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex items-center justify-center font-black text-2xl shadow-md shadow-indigo-600/20 shrink-0">
-            {currentStudent.name.charAt(0)}
+          <div 
+            onClick={() => onUpdateStudent && setShowProfileModal(true)} 
+            className={`relative group shrink-0 ${onUpdateStudent ? 'cursor-pointer' : ''}`}
+            title={onUpdateStudent ? 'Clique para atualizar seus dados cadastrais' : undefined}
+          >
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex items-center justify-center font-black text-2xl shadow-md shadow-indigo-600/20 group-hover:scale-105 transition-transform">
+              {currentStudent.name.charAt(0)}
+            </div>
+            {onUpdateStudent && (
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-indigo-600 group-hover:bg-indigo-700 text-white border-2 border-white flex items-center justify-center text-[10px] shadow-sm transition-colors">
+                <i className="fas fa-pencil-alt"></i>
+              </div>
+            )}
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -300,7 +315,22 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
                 </button>
               )}
             </div>
-            <h2 className="text-2xl font-black text-slate-900 mt-1">{currentStudent.name}</h2>
+            
+            <div className="flex flex-wrap items-center gap-3 mt-1">
+              <h2 className="text-2xl font-black text-slate-900">{currentStudent.name}</h2>
+              {onUpdateStudent && (
+                <button
+                  type="button"
+                  onClick={() => setShowProfileModal(true)}
+                  className="text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/90 px-3 py-1 rounded-xl transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  title="Atualizar dados cadastrais (exceto matrícula)"
+                >
+                  <i className="fas fa-user-edit text-xs text-indigo-600"></i>
+                  <span>Atualizar Meus Dados</span>
+                </button>
+              )}
+            </div>
+
             <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-slate-500 font-semibold">
               <span>Matrícula: <strong className="text-slate-700 font-mono">{currentStudent.matricula}</strong></span>
               <span className="text-slate-300">•</span>
@@ -309,20 +339,49 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
               <span>Turma: <strong className="text-slate-700">{currentStudent.turma || 'A'}</strong></span>
               <span className="text-slate-300">•</span>
               <span>Turno: <strong className="text-slate-700">{currentStudent.turno || 'Integral'}</strong></span>
+              {currentStudent.email && (
+                <>
+                  <span className="text-slate-300">•</span>
+                  <span className="flex items-center gap-1 text-slate-600" title="E-mail cadastrado">
+                    <i className="fas fa-envelope text-indigo-400 text-[10px]"></i>
+                    {currentStudent.email}
+                  </span>
+                </>
+              )}
+              {currentStudent.responsibleName && (
+                <>
+                  <span className="text-slate-300">•</span>
+                  <span className="flex items-center gap-1 text-slate-600" title={`Responsável: ${currentStudent.responsibleName}${currentStudent.responsiblePhone ? ` (${currentStudent.responsiblePhone})` : ''}`}>
+                    <i className="fas fa-user-shield text-purple-400 text-[10px]"></i>
+                    Resp: {currentStudent.responsibleName.split(' ')[0]}
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-4 md:pt-0 border-slate-100">
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-4 md:pt-0 border-slate-100">
           <div className="text-right hidden sm:block">
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Status Geral</p>
             <p className="text-sm font-black text-slate-800">
               {stats.voted} de {stats.total} Votações Realizadas
             </p>
           </div>
+          {onUpdateStudent && (
+            <button
+              type="button"
+              onClick={() => setShowProfileModal(true)}
+              className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-2xl text-xs font-bold transition-all flex items-center gap-2 shadow-sm shadow-indigo-600/20 cursor-pointer"
+              title="Atualizar dados cadastrais (exceto matrícula)"
+            >
+              <i className="fas fa-user-edit text-sm"></i>
+              <span>Atualizar Dados</span>
+            </button>
+          )}
           <button
             onClick={onLogout}
-            className="px-4 py-2.5 bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 border border-slate-200/60"
+            className="px-4 py-2.5 bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 border border-slate-200/60 cursor-pointer"
             title="Finalizar Sessão Segura"
           >
             <i className="fas fa-power-off text-sm"></i>
@@ -1083,6 +1142,16 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Modal para o discente atualizar seus próprios dados (exceto matrícula) */}
+      {onUpdateStudent && (
+        <StudentProfileModal
+          isOpen={showProfileModal}
+          onClose={() => setShowProfileModal(false)}
+          student={currentStudent}
+          onSave={onUpdateStudent}
+        />
       )}
     </div>
   );
