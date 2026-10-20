@@ -282,41 +282,7 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
             )}
           </div>
           <div>
-            <div className="flex flex-wrap items-center gap-2">
-              {isPresentToday ? (
-                <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
-                  <i className="fas fa-check-circle text-emerald-600"></i>
-                  Presença Confirmada Hoje
-                </span>
-              ) : (
-                <span className="text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 px-2.5 py-0.5 rounded-md border border-rose-200 flex items-center gap-1">
-                  <i className="fas fa-user-slash text-rose-600"></i>
-                  Faltoso Hoje (Bloqueado)
-                </span>
-              )}
-              <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-md border border-emerald-100 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span>
-                Urna Conectada
-              </span>
-              <span className="text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-md border border-indigo-100 flex items-center gap-1.5">
-                <i className="fas fa-database text-[10px] text-indigo-500"></i>
-                Firestore: {lastSyncTime ? `Sincronizado (${lastSyncTime})` : 'Ao Vivo'}
-              </span>
-              {onRefresh && (
-                <button
-                  type="button"
-                  onClick={() => onRefresh()}
-                  disabled={isSyncing}
-                  className="text-[10px] font-black uppercase tracking-wider bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 px-2.5 py-0.5 rounded-md border border-slate-200 transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                  title="Recarregar votações diretamente do banco de dados agora"
-                >
-                  <i className={`fas fa-sync-alt text-[10px] ${isSyncing ? 'fa-spin text-indigo-600' : ''}`}></i>
-                  <span>{isSyncing ? 'Sincronizando...' : 'Atualizar Votações'}</span>
-                </button>
-              )}
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-3 mt-1">
+            <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-2xl font-black text-slate-900">{currentStudent.name}</h2>
               {onUpdateStudent && (
                 <button

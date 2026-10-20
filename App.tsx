@@ -1412,17 +1412,6 @@ const App: React.FC = () => {
           )
         ) : (
           <>
-            {/* Header Section */}
-            <div className="text-center space-y-3">
-              <div className="inline-block bg-indigo-150 text-indigo-700 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest mb-1 shadow-sm border border-indigo-200">
-                🎫 Portal EduVotação
-              </div>
-              <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight sm:text-5xl">EDUVOTAÇÃO GERAL</h2>
-              <p className="text-slate-500 max-w-xl mx-auto text-base">
-                Plataforma democrática escolar. Escolha uma categoria abaixo para exercer sua cidadania e registrar sua voz nas decisões escolares.
-              </p>
-            </div>
-
             {!currentStudent ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center max-w-4xl mx-auto">
                 <div className="order-2 md:order-1 md:col-span-2">
