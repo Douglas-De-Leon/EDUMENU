@@ -270,7 +270,7 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
           <div 
             onClick={() => onUpdateStudent && setShowProfileModal(true)} 
             className={`relative group shrink-0 ${onUpdateStudent ? 'cursor-pointer' : ''}`}
-            title={onUpdateStudent ? 'Clique para atualizar seus dados cadastrais' : undefined}
+            title={onUpdateStudent ? 'Clique para atualizar seu e-mail e dados do responsável' : undefined}
           >
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex items-center justify-center font-black text-2xl shadow-md shadow-indigo-600/20 group-hover:scale-105 transition-transform">
               {currentStudent.name.charAt(0)}
@@ -323,10 +323,10 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
                   type="button"
                   onClick={() => setShowProfileModal(true)}
                   className="text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/90 px-3 py-1 rounded-xl transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                  title="Atualizar dados cadastrais (exceto matrícula)"
+                  title="Atualizar dados do responsável e seu e-mail"
                 >
-                  <i className="fas fa-user-edit text-xs text-indigo-600"></i>
-                  <span>Atualizar Meus Dados</span>
+                  <i className="fas fa-address-book text-xs text-indigo-600"></i>
+                  <span>Atualizar Contatos</span>
                 </button>
               )}
             </div>
@@ -373,10 +373,10 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
               type="button"
               onClick={() => setShowProfileModal(true)}
               className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-2xl text-xs font-bold transition-all flex items-center gap-2 shadow-sm shadow-indigo-600/20 cursor-pointer"
-              title="Atualizar dados cadastrais (exceto matrícula)"
+              title="Atualizar dados do responsável e seu e-mail"
             >
-              <i className="fas fa-user-edit text-sm"></i>
-              <span>Atualizar Dados</span>
+              <i className="fas fa-address-book text-sm"></i>
+              <span>Atualizar Contatos</span>
             </button>
           )}
           <button

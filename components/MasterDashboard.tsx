@@ -31,6 +31,8 @@ export const MasterDashboard: React.FC<MasterDashboardProps> = ({
   const [schoolToDelete, setSchoolToDelete] = useState<string | null>(null);
   const [adminToDelete, setAdminToDelete] = useState<string | null>(null);
   const [adminError, setAdminError] = useState<string | null>(null);
+  const [showNewAdminPassword, setShowNewAdminPassword] = useState(false);
+  const [showEditAdminPassword, setShowEditAdminPassword] = useState(false);
 
   const handleAddSchool = (e: React.FormEvent) => {
     e.preventDefault();
@@ -246,14 +248,25 @@ export const MasterDashboard: React.FC<MasterDashboardProps> = ({
                 
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Senha</label>
-                  <input 
-                    required
-                    type="password"
-                    placeholder="***"
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                    value={newAdmin.password}
-                    onChange={e => setNewAdmin({...newAdmin, password: e.target.value})}
-                  />
+                  <div className="relative">
+                    <input 
+                      required
+                      type={showNewAdminPassword ? "text" : "password"}
+                      placeholder="***"
+                      className="w-full px-4 pr-11 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                      value={newAdmin.password}
+                      onChange={e => setNewAdmin({...newAdmin, password: e.target.value})}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewAdminPassword(!showNewAdminPassword)}
+                      tabIndex={-1}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 p-1.5 transition-colors focus:outline-none cursor-pointer"
+                      title={showNewAdminPassword ? "Ocultar senha" : "Ver senha"}
+                    >
+                      <i className={`fas ${showNewAdminPassword ? 'fa-eye-slash text-indigo-600' : 'fa-eye'}`}></i>
+                    </button>
+                  </div>
                 </div>
                 
                 <button className="md:col-span-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-200 transition-all active:scale-95 mt-2">
@@ -310,13 +323,24 @@ export const MasterDashboard: React.FC<MasterDashboardProps> = ({
                         </div>
                         <div className="space-y-1">
                           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Nova Senha (Opcional)</label>
-                          <input 
-                            type="password"
-                            placeholder="Deixe em branco para manter"
-                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                            value={editingAdmin.password || ''}
-                            onChange={e => setEditingAdmin({...editingAdmin, password: e.target.value})}
-                          />
+                          <div className="relative">
+                            <input 
+                              type={showEditAdminPassword ? "text" : "password"}
+                              placeholder="Deixe em branco para manter"
+                              className="w-full px-4 pr-11 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                              value={editingAdmin.password || ''}
+                              onChange={e => setEditingAdmin({...editingAdmin, password: e.target.value})}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowEditAdminPassword(!showEditAdminPassword)}
+                              tabIndex={-1}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 p-1.5 transition-colors focus:outline-none cursor-pointer"
+                              title={showEditAdminPassword ? "Ocultar senha" : "Ver senha"}
+                            >
+                              <i className={`fas ${showEditAdminPassword ? 'fa-eye-slash text-indigo-600' : 'fa-eye'}`}></i>
+                            </button>
+                          </div>
                         </div>
                         <div className="md:col-span-2 flex justify-end gap-3 mt-2">
                           <button 

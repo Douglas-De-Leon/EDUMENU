@@ -54,6 +54,7 @@ const App: React.FC = () => {
   const [loginStep, setLoginStep] = useState<'landing' | 'role_selection' | 'student_login' | 'admin_login'>('landing');
   const [loginId, setLoginId] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [dbLatency, setDbLatency] = useState<number | null>(null);
   const [isTestingDb, setIsTestingDb] = useState(false);
@@ -1046,6 +1047,7 @@ const App: React.FC = () => {
     setCurrentStudent(null);
     setLoginId('');
     setLoginPassword('');
+    setShowLoginPassword(false);
     setSelectedMealId(null);
     setError(null);
     setLoginStep('landing');
@@ -1101,6 +1103,7 @@ const App: React.FC = () => {
     setError(null);
     setLoginId('');
     setLoginPassword('');
+    setShowLoginPassword(false);
   };
 
   const handleExit = () => {
@@ -1230,14 +1233,24 @@ const App: React.FC = () => {
                     <div className="relative">
                       <i className="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
                       <input 
-                        type="password" 
+                        type={showLoginPassword ? "text" : "password"} 
                         required
                         disabled={isLoggingIn}
                         placeholder="***"
-                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-lg font-medium disabled:opacity-60"
+                        className="w-full pl-12 pr-12 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all text-lg font-medium disabled:opacity-60"
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowLoginPassword(!showLoginPassword)}
+                        tabIndex={-1}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 p-2 rounded-lg transition-colors focus:outline-none cursor-pointer"
+                        title={showLoginPassword ? "Ocultar senha" : "Ver senha"}
+                        aria-label={showLoginPassword ? "Ocultar senha" : "Ver senha"}
+                      >
+                        <i className={`fas ${showLoginPassword ? 'fa-eye-slash text-indigo-600' : 'fa-eye'} text-lg`}></i>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1267,7 +1280,10 @@ const App: React.FC = () => {
                   <button 
                     type="button"
                     disabled={isLoggingIn}
-                    onClick={() => setLoginStep('role_selection')}
+                    onClick={() => {
+                      setLoginStep('role_selection');
+                      setShowLoginPassword(false);
+                    }}
                     className="w-full bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold py-4 px-6 rounded-2xl transition-all text-sm disabled:opacity-50"
                   >
                     Voltar
@@ -1326,10 +1342,10 @@ const App: React.FC = () => {
               type="button" 
               onClick={() => setShowStudentProfileModal(true)} 
               className="text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
-              title="Atualizar meus dados cadastrais (exceto matrícula)"
+              title="Atualizar dados do responsável e seu e-mail"
             >
-              <i className="fas fa-user-edit text-indigo-600"></i>
-              <span>Atualizar Meus Dados</span>
+              <i className="fas fa-address-book text-indigo-600"></i>
+              <span>Atualizar Contatos</span>
             </button>
           )}
 
