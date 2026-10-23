@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Student, VotingSession, MealOption, Selection, AttendanceRecord } from '../types';
 import { StudentProfileModal } from './StudentProfileModal';
+import { getSessionTimingStatus } from '../utils/votingStatus';
 
 interface StudentVotingDashboardProps {
   currentStudent: Student;
@@ -33,7 +34,7 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'voted'>('all');
+  const [statusFilter, setStatusFilter] = useState<'available' | 'finalized' | 'pending' | 'voted' | 'all'>('available');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -107,9 +108,10 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
     const sessionDate = session.date || todayDateStr;
     const formattedDate = sessionDate.split('-').reverse().join('/');
     const attendance = attendanceRecords ? attendanceRecords.find(a => a.date === sessionDate) : null;
+    const timing = getSessionTimingStatus(session);
 
-    // REGRA: Por padrão, todos os discentes cadastrados iniciam como faltosos.
-    // Apenas após ser realizada a frequência e confirmada a presença é que o voto é habilitado!
+    // REGRA 1: Presença obrigatória no mesmo dia da votação.
+    // Por padrão, todos os discentes cadastrados iniciam como faltosos até a chamada ser confirmada!
     if (!attendance) {
       return {
         eligible: false,
@@ -129,6 +131,45 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
       };
     }
 
+    // REGRA 2: Bloqueio quando o dia da votação for finalizado.
+    if (timing.isPastDay) {
+      return {
+        eligible: false,
+        sessionDate,
+        status: 'finalized_day',
+        reason: `Votação finalizada. O dia desta eleição (${formattedDate}) foi encerrado e não recebe mais novos votos.`
+      };
+    }
+
+    // REGRA 3: Bloqueio automático ao atingir o horário limite cadastrado.
+    if (timing.isTimeExpired) {
+      return {
+        eligible: false,
+        sessionDate,
+        status: 'time_locked',
+        reason: `Votação bloqueada: o horário limite estabelecido (${session.closingTime}) foi atingido para esta votação.`
+      };
+    }
+
+    // REGRA 4: Votação agendada para data futura.
+    if (timing.isFutureDay) {
+      return {
+        eligible: false,
+        sessionDate,
+        status: 'scheduled',
+        reason: `Votação agendada para ${formattedDate}. O voto será liberado no dia da eleição após a confirmação da presença.`
+      };
+    }
+
+    if (!session.active) {
+      return {
+        eligible: false,
+        sessionDate,
+        status: 'paused',
+        reason: `Esta votação foi temporariamente pausada pela comissão eleitoral.`
+      };
+    }
+
     return { 
       eligible: true, 
       sessionDate, 
@@ -142,18 +183,21 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
     const total = votingSessions.length;
     let voted = 0;
     let pending = 0;
+    let finalized = 0;
+    let available = 0;
 
     votingSessions.forEach(session => {
       const hasVoted = Boolean(getStudentVote(session));
-      if (hasVoted) {
-        voted++;
-      } else if (session.active) {
-        pending++;
-      }
+      const timing = getSessionTimingStatus(session);
+
+      if (hasVoted) voted++;
+      if (timing.isFinalized) finalized++;
+      if (!timing.isPastDay) available++;
+      if (!hasVoted && session.active && !timing.isFinalized) pending++;
     });
 
     const completionRate = total > 0 ? Math.round((voted / total) * 100) : 0;
-    return { total, voted, pending, completionRate };
+    return { total, voted, pending, finalized, available, completionRate };
   }, [votingSessions, selections, currentStudent]);
 
   // Filtered voting sessions list
@@ -161,16 +205,32 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
     return votingSessions.filter(session => {
       const vote = getStudentVote(session);
       const isVoted = Boolean(vote);
+      const timing = getSessionTimingStatus(session);
 
       if (categoryFilter !== 'all' && session.category !== categoryFilter) {
         return false;
       }
 
-      if (statusFilter === 'pending' && (isVoted || !session.active)) {
-        return false;
-      }
-      if (statusFilter === 'voted' && !isVoted) {
-        return false;
+      // REGRA: Quando finalizar o dia, oculte aquela votação da tela padrão do aluno
+      // e coloque em uma aba de filtros "votações finalizadas"
+      if (statusFilter === 'available') {
+        // Modo padrão: apenas votações ativas/agendadas (dias finalizados são ocultados do aluno)
+        if (timing.isPastDay) {
+          return false;
+        }
+      } else if (statusFilter === 'finalized') {
+        // Aba de filtros "Votações Finalizadas": exibe dias finalizados e votações expiradas por horário
+        if (!timing.isFinalized) {
+          return false;
+        }
+      } else if (statusFilter === 'pending') {
+        if (isVoted || !session.active || timing.isFinalized) {
+          return false;
+        }
+      } else if (statusFilter === 'voted') {
+        if (!isVoted) {
+          return false;
+        }
       }
 
       if (searchQuery.trim()) {
@@ -448,7 +508,104 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
           )}
 
           {/* Filter and Search Bar */}
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+            {/* STATUS TABS: VOTAÇÕES DISPONÍVEIS, VOTAÇÕES FINALIZADAS, PENDENTES, ETC */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('available')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 ${
+                    statusFilter === 'available'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-700'
+                  }`}
+                >
+                  <i className="fas fa-calendar-check text-[11px]"></i>
+                  <span>Votações Disponíveis</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${statusFilter === 'available' ? 'bg-indigo-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                    {stats.available}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('finalized')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 ${
+                    statusFilter === 'finalized'
+                      ? 'bg-slate-800 text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                  }`}
+                  title="Votações de dias anteriores encerrados ou bloqueadas por horário"
+                >
+                  <i className="fas fa-flag-checkered text-[11px]"></i>
+                  <span>Votações Finalizadas</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${statusFilter === 'finalized' ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                    {stats.finalized}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('pending')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 ${
+                    statusFilter === 'pending'
+                      ? 'bg-amber-500 text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-700'
+                  }`}
+                >
+                  <i className="fas fa-clock text-[11px]"></i>
+                  <span>Pendentes</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${statusFilter === 'pending' ? 'bg-amber-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                    {stats.pending}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('voted')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 ${
+                    statusFilter === 'voted'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700'
+                  }`}
+                >
+                  <i className="fas fa-check-circle text-[11px]"></i>
+                  <span>Já Votadas</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${statusFilter === 'voted' ? 'bg-emerald-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                    {stats.voted}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('all')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 ${
+                    statusFilter === 'all'
+                      ? 'bg-slate-700 text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}
+                >
+                  <span>Todas</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${statusFilter === 'all' ? 'bg-slate-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                    {stats.total}
+                  </span>
+                </button>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative w-full sm:w-64">
+                <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input
+                  type="text"
+                  placeholder="Buscar votação..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+
             {/* Category Pills */}
             <div className="flex flex-wrap items-center gap-2">
               {[
@@ -469,40 +626,16 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
                 <button
                   key={tab.id}
                   onClick={() => setCategoryFilter(tab.id)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-extrabold transition-all flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                     categoryFilter === tab.id
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
+                      ? 'bg-indigo-600 text-white shadow-2xs'
+                      : 'bg-slate-100 hover:bg-slate-200/80 text-slate-600'
                   }`}
                 >
                   <i className={`fas ${tab.icon} text-[11px]`}></i>
                   <span>{tab.label}</span>
                 </button>
               ))}
-            </div>
-
-            {/* Status & Search */}
-            <div className="flex flex-wrap items-center gap-2.5">
-              <select
-                value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value as any)}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="all">Todos os Status</option>
-                <option value="pending">⏳ Pendentes para Votar</option>
-                <option value="voted">✅ Já Votadas</option>
-              </select>
-
-              <div className="relative flex-1 sm:w-56">
-                <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                <input
-                  type="text"
-                  placeholder="Buscar votação..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
             </div>
           </div>
 
@@ -518,7 +651,7 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
                   ? session.optionIds.length 
                   : mealOptions.filter(m => m.category === session.category && m.active).length;
                 const sessionDateFormatted = session.date ? session.date.split('-').reverse().join('/') : 'Em aberto';
-                const todaySession = session.date ? isToday(session.date) : false;
+                const timing = getSessionTimingStatus(session);
                 const attendanceCheck = isStudentEligibleToVote(session);
                 const isAttendanceBlocked = !isVoted && !attendanceCheck.eligible;
 
@@ -528,11 +661,15 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
                     className={`bg-white rounded-3xl border-2 transition-all p-6 flex flex-col justify-between relative group ${
                       isVoted 
                         ? 'border-emerald-200 shadow-sm bg-gradient-to-b from-white to-emerald-50/20' 
-                        : isAttendanceBlocked
-                          ? 'border-rose-200 bg-rose-50/20'
-                          : session.active 
-                            ? 'border-slate-200/90 hover:border-indigo-500 hover:shadow-lg' 
-                            : 'border-slate-200 bg-slate-50/70 opacity-80'
+                        : timing.isPastDay
+                          ? 'border-slate-300 bg-slate-50/80 opacity-80'
+                          : timing.isTimeExpired
+                            ? 'border-rose-200 bg-rose-50/25'
+                            : isAttendanceBlocked
+                              ? 'border-rose-200 bg-rose-50/20'
+                              : session.active 
+                                ? 'border-slate-200/90 hover:border-indigo-500 hover:shadow-lg' 
+                                : 'border-slate-200 bg-slate-50/70 opacity-80'
                     }`}
                   >
                     <div>
@@ -543,21 +680,34 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
                           {catConfig.label}
                         </span>
 
-                        <div className="flex items-center gap-1.5">
-                          {todaySession && (
-                            <span className="text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full border border-amber-200">
-                              📅 Hoje
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {timing.isPastDay ? (
+                            <span className="text-[10px] font-black uppercase tracking-wider bg-slate-200 text-slate-700 px-2.5 py-0.5 rounded-full border border-slate-300 flex items-center gap-1">
+                              <i className="fas fa-flag-checkered"></i> Dia Finalizado
+                            </span>
+                          ) : timing.isTimeExpired ? (
+                            <span className="text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 px-2.5 py-0.5 rounded-full border border-rose-200 flex items-center gap-1">
+                              <i className="fas fa-lock"></i> Bloqueada ({session.closingTime})
+                            </span>
+                          ) : timing.isToday ? (
+                            <span className="text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full border border-amber-200 flex items-center gap-1">
+                              📅 Hoje {session.closingTime ? `(até ${session.closingTime})` : ''}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full border border-blue-200">
+                              📅 Agendada
                             </span>
                           )}
+
                           {isVoted ? (
                             <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
                               <i className="fas fa-check-circle"></i>
                               Voto Registrado
                             </span>
-                          ) : isAttendanceBlocked ? (
+                          ) : !attendanceCheck.eligible ? (
                             <span className="text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 px-2.5 py-0.5 rounded-full border border-rose-200 flex items-center gap-1">
                               <i className="fas fa-user-slash"></i>
-                              {attendanceCheck.status === 'awaiting_attendance' ? 'Aguardando Presença (Faltoso)' : 'Faltoso (Bloqueado)'}
+                              {attendanceCheck.status === 'awaiting_attendance' ? 'Aguardando Presença' : attendanceCheck.status === 'absent' ? 'Faltoso (Bloqueado)' : 'Voto Bloqueado'}
                             </span>
                           ) : session.active ? (
                             <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
@@ -580,25 +730,29 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
                         {session.description || 'Votação oficial registrada no sistema para participação dos discentes.'}
                       </p>
 
-                      {/* Session Details bar */}
-                      <div className="bg-slate-50 rounded-2xl p-3 border border-slate-150 flex items-center justify-between text-xs mb-5">
-                        <div className="flex items-center gap-2 text-slate-600 font-bold">
+                      {/* Session Details bar with Date & Closing Time */}
+                      <div className="bg-slate-50 rounded-2xl p-3 border border-slate-150 flex flex-wrap items-center justify-between text-xs mb-5 gap-2 font-semibold">
+                        <div className="flex items-center gap-2 text-slate-700">
                           <i className="fas fa-calendar-alt text-indigo-500"></i>
-                          <span>Data: <strong>{sessionDateFormatted}</strong></span>
+                          <span>Data: <strong className="font-mono">{sessionDateFormatted}</strong></span>
                         </div>
-                        <div className="flex items-center gap-2 text-slate-600 font-bold">
-                          <i className="fas fa-user-check text-indigo-500"></i>
+                        <div className="flex items-center gap-2 text-slate-700">
+                          <i className="far fa-clock text-amber-500"></i>
+                          <span>Horário Limite: <strong className="font-mono">{session.closingTime ? `${session.closingTime}` : 'Até 23:59'}</strong></span>
+                        </div>
+                        <div className="flex items-center gap-2 text-slate-600">
+                          <i className="fas fa-list-check text-indigo-500"></i>
                           <span>{optionsCount} opções na cédula</span>
                         </div>
                       </div>
 
-                      {/* If student is blocked by attendance */}
-                      {isAttendanceBlocked && (
+                      {/* If student is blocked by attendance or time */}
+                      {!isVoted && !attendanceCheck.eligible && (
                         <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3.5 mb-5 flex items-start gap-2.5">
-                          <i className="fas fa-user-slash text-rose-600 text-sm mt-0.5 shrink-0"></i>
+                          <i className="fas fa-exclamation-triangle text-rose-600 text-sm mt-0.5 shrink-0"></i>
                           <div>
                             <span className="text-[10px] font-black uppercase tracking-wider text-rose-800 block">
-                              Voto Não Permitido (Frequência Escolar)
+                              Voto Não Permitido
                             </span>
                             <span className="text-xs font-semibold text-rose-900 block leading-tight mt-0.5">
                               {attendanceCheck.reason}
@@ -637,7 +791,23 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
                           <i className="fas fa-receipt"></i>
                           Ver Comprovante Eleitoral
                         </button>
-                      ) : isAttendanceBlocked ? (
+                      ) : timing.isPastDay ? (
+                        <button
+                          disabled
+                          className="w-full py-3.5 px-4 rounded-xl font-black text-xs bg-slate-100 text-slate-500 border border-slate-300 cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                          <i className="fas fa-flag-checkered"></i>
+                          Votação Finalizada (Dia Encerrado)
+                        </button>
+                      ) : timing.isTimeExpired ? (
+                        <button
+                          disabled
+                          className="w-full py-3.5 px-4 rounded-xl font-black text-xs bg-rose-100 text-rose-700 border border-rose-200 cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                          <i className="fas fa-lock"></i>
+                          Votação Bloqueada (Horário Limite Atingido)
+                        </button>
+                      ) : !attendanceCheck.eligible ? (
                         <button
                           disabled
                           className="w-full py-3.5 px-4 rounded-xl font-black text-xs bg-rose-100 text-rose-700 border border-rose-200 cursor-not-allowed flex items-center justify-center gap-2"

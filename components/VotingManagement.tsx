@@ -6,6 +6,7 @@ import {
   dbClearAllCategories, 
   dbFetchCategories 
 } from '../services/databaseService';
+import { getSessionTimingStatus } from '../utils/votingStatus';
 
 interface VotingManagementProps {
   mealOptions: MealOption[];
@@ -80,11 +81,13 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
   const [isCreatingNewCategory, setIsCreatingNewCategory] = useState(false);
   const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [votingDate, setVotingDate] = useState<string>(getTodayStr);
+  const [closingTime, setClosingTime] = useState<string>('17:00');
   const [selectedOptionIds, setSelectedOptionIds] = useState<string[]>([]);
   const [currentSelectedDropdownOption, setCurrentSelectedDropdownOption] = useState<string>('');
   const [formError, setFormError] = useState<string | null>(null);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [statusFilterTab, setStatusFilterTab] = useState<'all' | 'active_today' | 'upcoming' | 'finalized'>('all');
 
   // Synchronize category selection if empty and categories become available
   useEffect(() => {
@@ -107,6 +110,7 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
     d.setDate(d.getDate() + 1);
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   });
+  const [reuseClosingTime, setReuseClosingTime] = useState<string>('17:00');
   const [reuseTitle, setReuseTitle] = useState('');
 
   // Helper Labels & Colors
@@ -303,6 +307,7 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
       description: description.trim() || undefined,
       category,
       date: votingDate,
+      closingTime: closingTime.trim() || undefined,
       optionIds: selectedOptionIds,
       active: true,
       createdAt: new Date().toISOString()
@@ -332,6 +337,7 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
       description: reuseModalSession.description,
       category: reuseModalSession.category,
       date: reuseTargetDate,
+      closingTime: reuseClosingTime.trim() || reuseModalSession.closingTime || undefined,
       optionIds: [...reuseModalSession.optionIds],
       active: true,
       parentSessionId: reuseModalSession.parentSessionId || reuseModalSession.id,
@@ -351,14 +357,54 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
     });
   };
 
+  // Status counts for filtering tabs
+  const statusCounts = useMemo(() => {
+    let activeToday = 0;
+    let upcoming = 0;
+    let finalized = 0;
+
+    votingSessions.forEach(s => {
+      const timing = getSessionTimingStatus(s);
+      if (timing.isFinalized) finalized++;
+      else if (timing.isFutureDay) upcoming++;
+      else if (timing.isToday && !timing.isTimeExpired && s.active) activeToday++;
+    });
+
+    return {
+      all: votingSessions.length,
+      activeToday,
+      upcoming,
+      finalized
+    };
+  }, [votingSessions]);
+
   // Filtered voting sessions list
   const filteredSessions = useMemo(() => {
     let list = [...votingSessions];
+
+    // Status filter tab
+    if (statusFilterTab === 'active_today') {
+      list = list.filter(s => {
+        const t = getSessionTimingStatus(s);
+        return t.isToday && !t.isTimeExpired && s.active;
+      });
+    } else if (statusFilterTab === 'upcoming') {
+      list = list.filter(s => {
+        const t = getSessionTimingStatus(s);
+        return t.isFutureDay && !t.isFinalized;
+      });
+    } else if (statusFilterTab === 'finalized') {
+      list = list.filter(s => {
+        const t = getSessionTimingStatus(s);
+        return t.isFinalized;
+      });
+    }
+
     if (filterCategory !== 'all') {
       list = list.filter(s => s.category === filterCategory);
     }
     return list.sort((a, b) => b.date.localeCompare(a.date));
-  }, [votingSessions, filterCategory]);
+  }, [votingSessions, statusFilterTab, filterCategory]);
 
   const formatDateDisplay = (dateStr: string) => {
     if (!dateStr) return 'Data não definida';
@@ -441,17 +487,30 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
             </div>
 
             <div className="space-y-4">
-              <div>
-                <label className="text-xs font-black text-slate-600 uppercase tracking-wider block mb-1">
-                  Selecione a Nova Data para a Medição:
-                </label>
-                <input
-                  type="date"
-                  value={reuseTargetDate}
-                  onChange={e => setReuseTargetDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none"
-                  required
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-black text-slate-600 uppercase tracking-wider block mb-1">
+                    Nova Data da Medição:
+                  </label>
+                  <input
+                    type="date"
+                    value={reuseTargetDate}
+                    onChange={e => setReuseTargetDate(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none font-mono"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-black text-slate-600 uppercase tracking-wider block mb-1">
+                    Horário Limite de Bloqueio:
+                  </label>
+                  <input
+                    type="time"
+                    value={reuseClosingTime}
+                    onChange={e => setReuseClosingTime(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500 outline-none font-mono"
+                  />
+                </div>
               </div>
 
               <div>
@@ -612,47 +671,92 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
               )}
             </div>
 
-            {/* 2. Specific Date Picker */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between items-center">
-                <label className="text-xs font-black text-slate-600 uppercase tracking-wider block">
-                  2. Data da Votação
-                </label>
-                <span className="text-[10px] text-indigo-600 font-bold uppercase">Obrigatório</span>
+            {/* 2. Specific Date and Closing Time Picker */}
+            <div className="space-y-3 p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Data */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-black text-slate-700 uppercase tracking-wider block">
+                      2. Data da Votação
+                    </label>
+                    <span className="text-[10px] text-indigo-600 font-bold uppercase">Obrigatório</span>
+                  </div>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold text-slate-800 font-mono shadow-2xs"
+                    value={votingDate}
+                    onChange={e => {
+                      setVotingDate(e.target.value);
+                      setFormError(null);
+                    }}
+                    required
+                  />
+                  {/* Quick Date Shortcuts */}
+                  <div className="flex gap-1.5 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setQuickDate(0)}
+                      className="text-[10px] font-bold px-2 py-0.5 bg-white hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 rounded-md border border-slate-200 transition-colors"
+                    >
+                      Hoje
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuickDate(1)}
+                      className="text-[10px] font-bold px-2 py-0.5 bg-white hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 rounded-md border border-slate-200 transition-colors"
+                    >
+                      Amanhã
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuickDate(7)}
+                      className="text-[10px] font-bold px-2 py-0.5 bg-white hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 rounded-md border border-slate-200 transition-colors"
+                    >
+                      Em 7 dias
+                    </button>
+                  </div>
+                </div>
+
+                {/* Horário de Bloqueio */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-black text-slate-700 uppercase tracking-wider block">
+                      Horário de Bloqueio
+                    </label>
+                    <span className="text-[10px] text-amber-600 font-bold uppercase">Automático</span>
+                  </div>
+                  <input
+                    type="time"
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-xs font-bold text-slate-800 font-mono shadow-2xs"
+                    value={closingTime}
+                    onChange={e => setClosingTime(e.target.value)}
+                    placeholder="17:00"
+                  />
+                  {/* Quick Time Shortcuts */}
+                  <div className="flex gap-1.5 pt-0.5">
+                    {['12:00', '14:30', '17:00', '22:00'].map(t => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setClosingTime(t)}
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border transition-colors ${
+                          closingTime === t ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-indigo-50'
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
-              <input
-                type="date"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-semibold text-slate-800 font-mono"
-                value={votingDate}
-                onChange={e => {
-                  setVotingDate(e.target.value);
-                  setFormError(null);
-                }}
-                required
-              />
-              {/* Quick Date Shortcuts */}
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setQuickDate(0)}
-                  className="text-[11px] font-bold px-2.5 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 rounded-lg transition-colors"
-                >
-                  Hoje
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuickDate(1)}
-                  className="text-[11px] font-bold px-2.5 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 rounded-lg transition-colors"
-                >
-                  Amanhã
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuickDate(7)}
-                  className="text-[11px] font-bold px-2.5 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 rounded-lg transition-colors"
-                >
-                  Em 7 dias
-                </button>
+
+              {/* Informative Rule Badge */}
+              <div className="p-2.5 bg-indigo-50/70 border border-indigo-150 rounded-xl flex items-start gap-2 text-[11px] text-indigo-900 leading-relaxed">
+                <i className="fas fa-clock text-indigo-600 text-xs mt-0.5 shrink-0"></i>
+                <span>
+                  <strong>Regra de Bloqueio:</strong> Ao atingir <strong>{closingTime || 'o fim do dia'}</strong> no dia <strong>{votingDate ? votingDate.split('-').reverse().join('/') : 'selecionado'}</strong>, a votação será bloqueada para os estudantes. Ao finalizar o dia, será automaticamente ocultada e arquivada na aba <strong>"Votações Finalizadas"</strong>.
+                </span>
               </div>
             </div>
 
@@ -872,46 +976,114 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
 
         {/* LIST PANEL: Votações Cadastradas & Reutilização para Medição em Dias Diferentes */}
         <section className="lg:col-span-7 bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/90 shadow-sm space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                <i className="fas fa-calendar-check text-indigo-500"></i>
-                Votações Cadastradas e Agendadas
-                <span className="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-full ml-2 font-mono">
-                  {votingSessions.length}
-                </span>
-              </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Votações abertas, agendadas por data e opções para mensurar em dias diferentes
-              </p>
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                  <i className="fas fa-calendar-check text-indigo-500"></i>
+                  Votações Cadastradas e Agendadas
+                  <span className="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-full ml-2 font-mono">
+                    {filteredSessions.length} de {votingSessions.length}
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Votações abertas, agendadas e controle de bloqueio por horário e data
+                </p>
+              </div>
+
+              {/* Category Filter */}
+              <div className="flex flex-wrap gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setFilterCategory('all')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                    filterCategory === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Todas Cats ({votingSessions.length})
+                </button>
+                {allAvailableCategories.slice(0, 4).map(cat => {
+                  const count = votingSessions.filter(s => s.category === cat).length;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setFilterCategory(cat)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                        filterCategory === cat ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {cat.substring(0, 6)} ({count})
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Category Filter */}
-            <div className="flex flex-wrap gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
+            {/* STATUS FILTER TABS: Votações Ativas, Agendadas e VOTAÇÕES FINALIZADAS */}
+            <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-100/80 rounded-2xl border border-slate-200">
               <button
                 type="button"
-                onClick={() => setFilterCategory('all')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                  filterCategory === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                onClick={() => setStatusFilterTab('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 ${
+                  statusFilterTab === 'all' 
+                    ? 'bg-white text-slate-800 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Todas ({votingSessions.length})
+                <span>Todas as Votações</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200/80 font-mono">
+                  {statusCounts.all}
+                </span>
               </button>
-              {allAvailableCategories.slice(0, 4).map(cat => {
-                const count = votingSessions.filter(s => s.category === cat).length;
-                return (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setFilterCategory(cat)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                      filterCategory === cat ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    {cat.substring(0, 5)}. ({count})
-                  </button>
-                );
-              })}
+
+              <button
+                type="button"
+                onClick={() => setStatusFilterTab('active_today')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 ${
+                  statusFilterTab === 'active_today' 
+                    ? 'bg-emerald-600 text-white shadow-sm' 
+                    : 'text-slate-600 hover:text-emerald-700 hover:bg-emerald-50'
+                }`}
+              >
+                <i className="fas fa-play-circle text-[11px]"></i>
+                <span>Ativas / Hoje</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${statusFilterTab === 'active_today' ? 'bg-emerald-700 text-white' : 'bg-emerald-100 text-emerald-800'}`}>
+                  {statusCounts.activeToday}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStatusFilterTab('upcoming')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 ${
+                  statusFilterTab === 'upcoming' 
+                    ? 'bg-blue-600 text-white shadow-sm' 
+                    : 'text-slate-600 hover:text-blue-700 hover:bg-blue-50'
+                }`}
+              >
+                <i className="fas fa-calendar-alt text-[11px]"></i>
+                <span>Agendadas (Futuras)</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${statusFilterTab === 'upcoming' ? 'bg-blue-700 text-white' : 'bg-blue-100 text-blue-800'}`}>
+                  {statusCounts.upcoming}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStatusFilterTab('finalized')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 ${
+                  statusFilterTab === 'finalized' 
+                    ? 'bg-slate-800 text-white shadow-sm' 
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'
+                }`}
+              >
+                <i className="fas fa-flag-checkered text-[11px]"></i>
+                <span>Votações Finalizadas</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${statusFilterTab === 'finalized' ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                  {statusCounts.finalized}
+                </span>
+              </button>
             </div>
           </div>
 
@@ -920,16 +1092,17 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
             {filteredSessions.length > 0 ? (
               filteredSessions.map(session => {
                 const includedOptions = mealOptions.filter(m => session.optionIds.includes(m.id));
-                const todayStr = getTodayStr();
-                const isToday = session.date === todayStr;
+                const timing = getSessionTimingStatus(session);
 
                 return (
                   <div
                     key={session.id}
                     className={`p-5 rounded-2xl border transition-all ${
-                      session.active 
-                        ? 'bg-slate-50/70 border-slate-200 hover:border-indigo-300' 
-                        : 'bg-slate-100/50 border-slate-200 opacity-75'
+                      timing.isFinalized
+                        ? 'bg-slate-100/70 border-slate-300 opacity-90'
+                        : session.active 
+                          ? 'bg-slate-50/70 border-slate-200 hover:border-indigo-300' 
+                          : 'bg-slate-100/50 border-slate-200 opacity-75'
                     }`}
                   >
                     <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 pb-3 border-b border-slate-200/60">
@@ -942,15 +1115,40 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
                             {getCategoryLabel(session.category)}
                           </span>
                           
-                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${
-                            session.active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
-                          }`}>
-                            {session.active ? '● Ativa para Voto' : '○ Suspensa'}
-                          </span>
+                          {/* Timing / Finalized Status Badge */}
+                          {timing.isPastDay ? (
+                            <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-md bg-slate-200 text-slate-700 flex items-center gap-1 font-bold">
+                              <i className="fas fa-flag-checkered"></i> Votação Finalizada (Dia Encerrado)
+                            </span>
+                          ) : timing.isTimeExpired ? (
+                            <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-1 font-bold">
+                              <i className="fas fa-lock"></i> Bloqueada no Horário ({session.closingTime})
+                            </span>
+                          ) : !session.active ? (
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-slate-200 text-slate-600">
+                              ○ Suspensa
+                            </span>
+                          ) : timing.isToday ? (
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-ping"></span>
+                              Aberta para Voto {session.closingTime ? `(até ${session.closingTime})` : ''}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-blue-100 text-blue-800">
+                              📅 Agendada
+                            </span>
+                          )}
 
-                          {isToday && (
+                          {timing.isToday && !timing.isFinalized && (
                             <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 animate-pulse">
                               ★ Votação do Dia
+                            </span>
+                          )}
+
+                          {session.closingTime && !timing.isPastDay && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-mono">
+                              <i className="fas fa-clock text-[9px] mr-1"></i>
+                              Bloqueio: {session.closingTime}
                             </span>
                           )}
 
@@ -967,12 +1165,16 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
                         )}
                       </div>
 
-                      {/* Date Badge */}
-                      <div className="sm:text-right shrink-0">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Data da Votação</span>
+                      {/* Date & Time Badge */}
+                      <div className="sm:text-right shrink-0 bg-white/80 p-2.5 rounded-xl border border-slate-200/80">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Data & Bloqueio</span>
                         <span className="text-sm font-black text-slate-800 flex items-center sm:justify-end gap-1.5 font-mono">
                           <i className="far fa-calendar-alt text-indigo-500"></i>
                           {formatDateDisplay(session.date)}
+                        </span>
+                        <span className="text-[11px] font-semibold text-slate-500 flex items-center sm:justify-end gap-1 mt-0.5 font-mono">
+                          <i className="far fa-clock text-slate-400"></i>
+                          {session.closingTime ? `Bloqueio às ${session.closingTime}` : 'Até o fim do dia'}
                         </span>
                       </div>
                     </div>

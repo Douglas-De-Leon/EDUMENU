@@ -55,6 +55,7 @@ export interface VotingSession {
   description?: string;
   category: 'Alimentação' | 'Gremio' | 'Representante' | 'Outros' | (string & {});
   date: string; // YYYY-MM-DD
+  closingTime?: string; // HH:mm - horário para bloquear a votação quando chegar no determinado horário e data
   optionIds: string[]; // IDs of the selected enabled MealOptions
   active: boolean;
   schoolId?: string;

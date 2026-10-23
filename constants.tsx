@@ -15,6 +15,7 @@ export const INITIAL_VOTING_SESSIONS: VotingSession[] = [
     description: 'Escolha a chapa de liderança estudantil que representará a escola nas atividades cívicas e culturais.',
     category: 'Gremio',
     date: getTodayDateStr(),
+    closingTime: '17:00',
     optionIds: ['gremio-chapa-a', 'gremio-chapa-b'],
     active: true
   },
@@ -24,6 +25,7 @@ export const INITIAL_VOTING_SESSIONS: VotingSession[] = [
     description: 'Votação oficial de classe para escolha do porta-voz dos alunos junto à coordenação pedagógica.',
     category: 'Representante',
     date: getTodayDateStr(),
+    closingTime: '16:30',
     optionIds: ['rep-joao', 'rep-maria'],
     active: true
   },
@@ -33,6 +35,7 @@ export const INITIAL_VOTING_SESSIONS: VotingSession[] = [
     description: 'Definição do prato principal preferido da comunidade escolar para o almoço e lanche.',
     category: 'Alimentação',
     date: getTodayDateStr(),
+    closingTime: '14:30',
     optionIds: ['alim-1', 'alim-2'],
     active: true
   },
@@ -42,6 +45,7 @@ export const INITIAL_VOTING_SESSIONS: VotingSession[] = [
     description: 'Consulta aos alunos sobre a programação e aprovação do calendário dos projetos e feiras.',
     category: 'Outros',
     date: getTodayDateStr(),
+    closingTime: '18:00',
     optionIds: ['outros-1', 'outros-2'],
     active: true
   }
