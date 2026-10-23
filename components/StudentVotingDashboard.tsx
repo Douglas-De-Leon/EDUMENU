@@ -15,6 +15,7 @@ interface StudentVotingDashboardProps {
   onCastVote: (session: VotingSession, optionId: string) => Promise<void> | void;
   onLogout: () => void;
   onUpdateStudent?: (student: Student) => Promise<void> | void;
+  onOpenPasswordModal?: () => void;
 }
 
 export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
@@ -28,7 +29,8 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
   onRefresh,
   onCastVote,
   onLogout,
-  onUpdateStudent
+  onUpdateStudent,
+  onOpenPasswordModal
 }) => {
   // Navigation state: null shows all registered votings, string shows specific ballot
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
@@ -345,15 +347,28 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-2xl font-black text-slate-900">{currentStudent.name}</h2>
               {onUpdateStudent && (
-                <button
-                  type="button"
-                  onClick={() => setShowProfileModal(true)}
-                  className="text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/90 px-3 py-1 rounded-xl transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                  title="Atualizar dados do responsável e seu e-mail"
-                >
-                  <i className="fas fa-address-book text-xs text-indigo-600"></i>
-                  <span>Atualizar Contatos</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowProfileModal(true)}
+                    className="text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/90 px-3 py-1 rounded-xl transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                    title="Atualizar dados do responsável e seu e-mail"
+                  >
+                    <i className="fas fa-address-book text-xs text-indigo-600"></i>
+                    <span>Atualizar Contatos</span>
+                  </button>
+                  {onOpenPasswordModal && (
+                    <button
+                      type="button"
+                      onClick={onOpenPasswordModal}
+                      className="text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/90 px-3 py-1 rounded-xl transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                      title="Atualizar sua senha de acesso"
+                    >
+                      <i className="fas fa-key text-xs text-indigo-600"></i>
+                      <span>Atualizar Senha</span>
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 
@@ -403,6 +418,17 @@ export const StudentVotingDashboard: React.FC<StudentVotingDashboardProps> = ({
             >
               <i className="fas fa-address-book text-sm"></i>
               <span>Atualizar Contatos</span>
+            </button>
+          )}
+          {onOpenPasswordModal && (
+            <button
+              type="button"
+              onClick={onOpenPasswordModal}
+              className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-bold transition-all flex items-center gap-2 shadow-sm shadow-purple-600/20 cursor-pointer"
+              title="Atualizar sua senha de acesso"
+            >
+              <i className="fas fa-key text-sm"></i>
+              <span>Atualizar Senha</span>
             </button>
           )}
           <button

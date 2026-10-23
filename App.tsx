@@ -30,6 +30,7 @@ import {
 import { handleFirestoreError, OperationType } from './utils/firestoreErrorHandler';
 import { StudentVotingDashboard } from './components/StudentVotingDashboard';
 import { StudentProfileModal } from './components/StudentProfileModal';
+import { StudentPasswordModal } from './components/StudentPasswordModal';
 import { dbAutoInitIfEmpty } from './services/databaseService';
 import { testDatabaseConnection } from './firebase';
 
@@ -107,6 +108,7 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : null;
   });
   const [showStudentProfileModal, setShowStudentProfileModal] = useState(false);
+  const [showStudentPasswordModal, setShowStudentPasswordModal] = useState(false);
   const [registeredStudents, setRegisteredStudents] = useState<Student[]>(() => {
     return dedupeByKey(getCachedData<Student[]>(CACHE_KEYS.STUDENTS) || INITIAL_STUDENTS, 'matricula');
   });
@@ -1338,15 +1340,27 @@ const App: React.FC = () => {
           </div>
           
           {userRole === 'student' && currentStudent && (
-            <button 
-              type="button" 
-              onClick={() => setShowStudentProfileModal(true)} 
-              className="text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
-              title="Atualizar dados do responsável e seu e-mail"
-            >
-              <i className="fas fa-address-book text-indigo-600"></i>
-              <span>Atualizar Contatos</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button 
+                type="button" 
+                onClick={() => setShowStudentProfileModal(true)} 
+                className="text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                title="Atualizar dados do responsável e seu e-mail"
+              >
+                <i className="fas fa-address-book text-indigo-600"></i>
+                <span>Atualizar Contatos</span>
+              </button>
+
+              <button 
+                type="button" 
+                onClick={() => setShowStudentPasswordModal(true)} 
+                className="text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                title="Atualizar sua senha de acesso"
+              >
+                <i className="fas fa-key text-indigo-600"></i>
+                <span>Atualizar Senha</span>
+              </button>
+            </div>
           )}
 
           {userRole === 'admin' && (
@@ -1367,6 +1381,16 @@ const App: React.FC = () => {
           <StudentProfileModal
             isOpen={showStudentProfileModal}
             onClose={() => setShowStudentProfileModal(false)}
+            student={currentStudent}
+            onSave={handleUpdateStudent}
+          />
+        )}
+
+        {/* Modal de Atualização de Senha para o Discente */}
+        {showStudentPasswordModal && currentStudent && (
+          <StudentPasswordModal
+            isOpen={showStudentPasswordModal}
+            onClose={() => setShowStudentPasswordModal(false)}
             student={currentStudent}
             onSave={handleUpdateStudent}
           />
@@ -1431,6 +1455,7 @@ const App: React.FC = () => {
                 onCastVote={handleCastVoteInSession}
                 onLogout={logout}
                 onUpdateStudent={handleUpdateStudent}
+                onOpenPasswordModal={() => setShowStudentPasswordModal(true)}
               />
             )}
           </>
