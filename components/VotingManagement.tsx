@@ -37,29 +37,39 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
   const [customCategories, setCustomCategories] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('voting_categories');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          if (!parsed.some(c => c.toUpperCase().includes('ALIMENTA'))) {
+            return ['ALIMENTAÇÃO', ...parsed];
+          }
+          return parsed;
+        }
+      }
     } catch (e) {}
-    return [];
+    return ['ALIMENTAÇÃO'];
   });
 
   // Load categories from database Firestore on mount
   useEffect(() => {
     dbFetchCategories().then(dbCats => {
-      if (dbCats && dbCats.length > 0) {
-        setCustomCategories(prev => {
-          const union = Array.from(new Set([...prev, ...dbCats]));
-          try {
-            localStorage.setItem('voting_categories', JSON.stringify(union));
-          } catch (e) {}
-          return union;
-        });
-      }
+      const baseList = dbCats && dbCats.length > 0 ? dbCats : ['ALIMENTAÇÃO'];
+      setCustomCategories(prev => {
+        const union = Array.from(new Set([...prev, ...baseList]));
+        if (!union.some(c => c.toUpperCase().includes('ALIMENTA'))) {
+          union.unshift('ALIMENTAÇÃO');
+        }
+        try {
+          localStorage.setItem('voting_categories', JSON.stringify(union));
+        } catch (e) {}
+        return union;
+      });
     }).catch(err => console.warn('Erro ao carregar categorias:', err));
   }, []);
 
   // Extract all available categories dynamically (NO forced standard categories!)
   const allAvailableCategories = useMemo(() => {
-    const set = new Set<string>(customCategories);
+    const set = new Set<string>(customCategories.length > 0 ? customCategories : ['ALIMENTAÇÃO']);
     votingSessions.forEach(s => s.category && set.add(s.category));
     mealOptions.forEach(m => m.category && set.add(m.category));
     return Array.from(set).filter(Boolean);
@@ -73,10 +83,13 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
       const saved = localStorage.getItem('voting_categories');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const alim = parsed.find(c => c.toUpperCase().includes('ALIMENTA'));
+          return alim || parsed[0];
+        }
       }
     } catch (e) {}
-    return '';
+    return 'ALIMENTAÇÃO';
   });
   const [isCreatingNewCategory, setIsCreatingNewCategory] = useState(false);
   const [customCategoryInput, setCustomCategoryInput] = useState('');

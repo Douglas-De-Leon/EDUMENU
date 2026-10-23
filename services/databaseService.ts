@@ -129,10 +129,18 @@ export async function dbFetchCategories(): Promise<string[]> {
       const data = d.data();
       if (data && data.name) names.push(data.name);
     });
+    if (names.length === 0) {
+      // Deixa cadastrada a categoria ALIMENTAÇÃO por padrão
+      return ['ALIMENTAÇÃO'];
+    }
+    // Garante que ALIMENTAÇÃO esteja na lista
+    if (!names.some(n => n.toUpperCase().includes('ALIMENTA'))) {
+      names.unshift('ALIMENTAÇÃO');
+    }
     return names;
   } catch (e) {
     console.warn('Erro ao carregar categorias do Firestore:', e);
-    return [];
+    return ['ALIMENTAÇÃO'];
   }
 }
 
@@ -259,8 +267,14 @@ export async function dbAutoInitIfEmpty(): Promise<boolean> {
         });
       }
 
-      // Mantém as categorias, opções e sessões de votação limpas no banco de dados para criação sob demanda do usuário
-      console.log('Banco de dados inicializado com sucesso (escolas, administradores e discentes).');
+      // 4. Categoria padrão ALIMENTAÇÃO (deixe cadastrada essa)
+      await setDoc(doc(db, 'categories', 'alimentacao'), {
+        id: 'alimentacao',
+        name: 'ALIMENTAÇÃO',
+        createdAt: new Date().toISOString()
+      });
+
+      console.log('Banco de dados inicializado com sucesso (escolas, administradores, discentes e categoria ALIMENTAÇÃO).');
 
       console.log('Script de gravação inicial concluído com sucesso.');
       if (typeof window !== 'undefined') {
