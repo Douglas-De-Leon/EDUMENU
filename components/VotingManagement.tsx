@@ -114,7 +114,6 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
   const [newOptionName, setNewOptionName] = useState('');
   const [newOptionDesc, setNewOptionDesc] = useState('');
   const [newOptionIdent, setNewOptionIdent] = useState('');
-  const [newOptionType, setNewOptionType] = useState<string>('Almoço');
 
   // Multi-day reuse modal state (Reutilizar em dias diferentes com a mesma regra de presença)
   const [reuseModalSession, setReuseModalSession] = useState<VotingSession | null>(null);
@@ -268,9 +267,8 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
       name: newOptionName.trim(),
       description: newOptionDesc.trim() || 'Opção cadastrada diretamente na votação',
       category: category as any,
-      calories: newOptionIdent.trim() || (category === 'Alimentação' ? newOptionType : 'Candidato'),
-      active: true,
-      mealType: newOptionType
+      calories: newOptionIdent.trim(),
+      active: true
     };
 
     if (onAddMeal) {
@@ -831,28 +829,13 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
                       className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
                     />
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <select
-                        value={newOptionType}
-                        onChange={e => setNewOptionType(e.target.value)}
-                        className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800"
-                      >
-                        <option value="Almoço">🍛 Almoço Completo</option>
-                        <option value="Lanche">🥪 Lanche / Fruta</option>
-                        <option value="Vegetariano">🥗 Vegetariano</option>
-                        <option value="Sobremesa">🍎 Sobremesa</option>
-                        <option value="Candidato">👤 Candidato / Chapa</option>
-                        <option value="Geral">📋 Opção Geral</option>
-                      </select>
-
-                      <input
-                        type="text"
-                        placeholder="Identificador / Calorias (Ex: 450 kcal, Nº 10)"
-                        value={newOptionIdent}
-                        onChange={e => setNewOptionIdent(e.target.value)}
-                        className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                      />
-                    </div>
+                    <input
+                      type="text"
+                      placeholder="Identificador / Calorias (Ex: 450 kcal, Nº 10)"
+                      value={newOptionIdent}
+                      onChange={e => setNewOptionIdent(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
 
                     <textarea
                       placeholder="Descrição, ingredientes ou propostas..."
