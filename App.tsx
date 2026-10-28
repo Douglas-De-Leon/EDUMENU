@@ -1117,19 +1117,34 @@ const App: React.FC = () => {
     if (loginStep === 'landing') {
       return (
         <div className="min-h-screen flex flex-col bg-slate-50">
-          <header className="bg-indigo-600 text-white shadow-lg sticky top-0 z-50">
-            <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-              <div className="flex items-center space-x-2">
-                <i className="fas fa-ticket-alt text-2xl rotate-[-15deg] inline-block text-amber-300"></i>
-                <h1 className="text-xl font-black tracking-tight">EDUVOTAÇÃO</h1>
+          <header className="bg-slate-950 text-white shadow-md sticky top-0 z-50 border-b border-slate-800">
+            <div className="max-w-7xl mx-auto px-6 py-3.5 flex justify-between items-center">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500 text-slate-950 flex items-center justify-center font-black text-sm">
+                  <i className="fas fa-check-to-slot"></i>
+                </div>
+                <div>
+                  <h1 className="text-base font-black tracking-tight leading-none text-white">EDUVOTAÇÃO</h1>
+                  <span className="text-[10px] text-emerald-400 font-semibold">Merenda & Gestão Inteligente</span>
+                </div>
               </div>
-              <div className="text-sm font-medium opacity-90 hidden sm:block">
-                Portal de Votação Estudantil
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setLoginStep('role_selection')}
+                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>Entrar no Sistema</span>
+                  <i className="fas fa-arrow-right text-[10px]"></i>
+                </button>
               </div>
             </div>
           </header>
           <main className="flex-grow">
-            <LandingPage onEnterApp={() => setLoginStep('role_selection')} />
+            <LandingPage 
+              onEnterApp={() => setLoginStep('role_selection')} 
+              onSelectRole={(role) => handleRoleSelect(role)}
+            />
           </main>
         </div>
       );
