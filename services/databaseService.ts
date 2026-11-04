@@ -226,3 +226,99 @@ export async function dbFetchAllData(): Promise<AllDatabaseData> {
 export async function dbAutoInitIfEmpty(): Promise<boolean> {
   return false;
 }
+
+/**
+ * Atualiza o banco de dados Firestore com a nova atualização da Categoria ALIMENTAÇÃO:
+ * - Registra a categoria oficial 'ALIMENTAÇÃO'
+ * - Cadastra as 4 opções oficiais de carnes (Vermelha, Branca, Peixe, Fígado) com dados nutricionais
+ * - Cadastra a sessão de votação ativa na Categoria Alimentação
+ */
+export async function dbSyncNutritionUpdate(schoolId?: string | null): Promise<{
+  success: boolean;
+  mealsCreated: number;
+  sessionCreated: boolean;
+  timestamp: string;
+}> {
+  const cleanSchoolId = schoolId || '';
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  // 1. Garante que a Categoria ALIMENTAÇÃO está gravada no Firestore
+  await setDoc(doc(db, 'categories', 'alimentacao'), {
+    id: 'alimentacao',
+    name: 'ALIMENTAÇÃO',
+    createdAt: now.toISOString()
+  });
+
+  // 2. As 4 Cédulas Oficiais de Carnes solicitadas (Vermelha, Branca, Peixe, Fígado)
+  const officialMeals: MealOption[] = [
+    {
+      id: 'alim-carne-vermelha',
+      name: 'Carne Vermelha: Iscas de Patinho com Cenoura & Ervas',
+      description: 'Carne bovina magra com cenoura e vagem no vapor. Rica em ferro heme e vitamina B12. Sobremesa: Laranja em gomos.',
+      category: 'Alimentação',
+      calories: '540 kcal',
+      active: true,
+      mealType: 'Almoço',
+      schoolId: cleanSchoolId || undefined
+    },
+    {
+      id: 'alim-carne-branca',
+      name: 'Carne Branca: Filé de Frango Grelhado com Milho',
+      description: 'Peito de frango selecionado com ervas finas e brócolis ao alho. Proteína magra de alto valor biológico. Sobremesa: Banana Prata.',
+      category: 'Alimentação',
+      calories: '495 kcal',
+      active: true,
+      mealType: 'Almoço',
+      schoolId: cleanSchoolId || undefined
+    },
+    {
+      id: 'alim-peixe',
+      name: 'Peixe: Filé de Tilápia Assada ao Limão & Azeite',
+      description: 'Pescado fresco assado com azeite e purê de abóbora cabotiá. Fonte de Ômega-3 e fósforo para concentração. Sobremesa: Maçã.',
+      category: 'Alimentação',
+      calories: '465 kcal',
+      active: true,
+      mealType: 'Almoço',
+      schoolId: cleanSchoolId || undefined
+    },
+    {
+      id: 'alim-figado',
+      name: 'Fígado: Fígado Bovino Acebolado com Cheiro-Verde',
+      description: 'Fígado bovino marinado no limão com couve refogada no azeite. 6.8mg de ferro e 500% IDR de Vitamina A. Sobremesa: Laranja em gomos.',
+      category: 'Alimentação',
+      calories: '515 kcal',
+      active: true,
+      mealType: 'Almoço',
+      schoolId: cleanSchoolId || undefined
+    }
+  ];
+
+  for (const meal of officialMeals) {
+    await setDoc(doc(db, 'meals', meal.id), meal);
+  }
+
+  // 3. Cadastra ou atualiza a Sessão de Votação da Merenda na Categoria Alimentação
+  const sessionId = `session-alim-nutricao-${todayStr}`;
+  const sessionDoc: VotingSession = {
+    id: sessionId,
+    title: 'Cardápio Escolar: Escolha da Proteína da Merenda',
+    description: 'Votação oficial para escolha do cardápio balanceado: Carne Vermelha, Carne Branca, Peixe ou Fígado.',
+    category: 'Alimentação',
+    date: todayStr,
+    closingTime: '11:30',
+    optionIds: officialMeals.map(m => m.id),
+    active: true,
+    schoolId: cleanSchoolId || undefined,
+    createdAt: now.toISOString()
+  };
+
+  await setDoc(doc(db, 'voting_sessions', sessionId), sessionDoc);
+
+  return {
+    success: true,
+    mealsCreated: officialMeals.length,
+    sessionCreated: true,
+    timestamp: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  };
+}

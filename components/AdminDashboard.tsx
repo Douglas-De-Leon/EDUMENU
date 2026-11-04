@@ -3,6 +3,7 @@ import { Selection, MealOption, Student, VotingSession, AttendanceRecord } from 
 import { VotingManagement } from './VotingManagement';
 import { IntelligentVotingDashboard } from './IntelligentVotingDashboard';
 import { IntelligentAttendanceDashboard } from './IntelligentAttendanceDashboard';
+import { FoodNutritionDashboard } from './FoodNutritionDashboard';
 
 interface AdminDashboardProps {
   selections: Selection[];
@@ -41,18 +42,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   isSyncing = false,
   lastSync
 }) => {
-  // As 3 abas oficiais da gestão escolar:
+  // As 4 abas oficiais da gestão escolar:
   // 1. Criar Votação
   // 2. Dashboard Inteligente de Votações
   // 3. Dashboard Inteligente de Frequências
-  const [activeTab, setActiveTab] = useState<'criar_votacao' | 'dashboard_votacoes' | 'dashboard_frequencias'>('criar_votacao');
+  // 4. Dashboard de Alimentação
+  const [activeTab, setActiveTab] = useState<'criar_votacao' | 'dashboard_votacoes' | 'dashboard_frequencias' | 'dashboard_alimentacao'>('criar_votacao');
 
   const totalGlobalVotes = selections.length;
   const totalRegisteredStudents = students.length;
 
   return (
     <div className="space-y-8 animate-fadeIn">
-      {/* Barra de Navegação Exclusiva das 4 Abas Oficiais */}
+      {/* Barra de Navegação Exclusiva das Abas Oficiais */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-slate-50 p-2 rounded-2xl border border-slate-200/60 shadow-inner">
         <div className="flex flex-wrap gap-2 w-full lg:w-auto">
           {/* Aba 1: Criar Votação */}
@@ -101,6 +103,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <i className="fas fa-user-check text-emerald-600"></i>
             <span>Dashboard Inteligente de Frequências</span>
           </button>
+
+          {/* Aba 4: Dashboard de Alimentação */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('dashboard_alimentacao')}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              activeTab === 'dashboard_alimentacao'
+                ? 'bg-white shadow-sm text-orange-700 font-black ring-1 ring-slate-200'
+                : 'text-slate-600 hover:text-slate-800'
+            }`}
+          >
+            <i className="fas fa-utensils text-orange-600"></i>
+            <span>Dashboard de Alimentação</span>
+            <span className="text-[10px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-bold">
+              Nutrição
+            </span>
+          </button>
         </div>
 
         {/* Status rápido de quórum */}
@@ -146,6 +165,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           onSaveAttendance={onSaveAttendance || (async () => {})}
           selections={selections}
           currentSchoolId={currentSchoolId}
+        />
+      )}
+
+      {/* 4. Dashboard de Alimentação & Nutrição */}
+      {activeTab === 'dashboard_alimentacao' && (
+        <FoodNutritionDashboard
+          students={students}
+          attendanceRecords={attendanceRecords}
+          mealOptions={mealOptions}
+          votingSessions={votingSessions}
+          onAddMeal={onAddMeal}
+          onAddVotingSession={onAddVotingSession}
+          currentSchoolId={currentSchoolId}
+          onRefreshData={onSyncDatabase}
         />
       )}
     </div>
