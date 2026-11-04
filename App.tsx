@@ -7,7 +7,6 @@ import { UserManagementDashboard } from './components/UserManagementDashboard';
 import { MasterDashboard } from './components/MasterDashboard';
 import { LandingPage } from './components/LandingPage';
 import { Student, Selection, MealOption, AdminUser, School, VotingSession, AttendanceRecord } from './types';
-import { MEAL_OPTIONS, INITIAL_STUDENTS, INITIAL_VOTING_SESSIONS } from './constants';
 import { db } from './firebase';
 import { 
   collection, 
@@ -31,7 +30,6 @@ import { handleFirestoreError, OperationType } from './utils/firestoreErrorHandl
 import { StudentVotingDashboard } from './components/StudentVotingDashboard';
 import { StudentProfileModal } from './components/StudentProfileModal';
 import { StudentPasswordModal } from './components/StudentPasswordModal';
-import { dbAutoInitIfEmpty } from './services/databaseService';
 import { testDatabaseConnection } from './firebase';
 
 function dedupeByKey<T>(items: T[], key: keyof T): T[] {
@@ -98,11 +96,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Inicialização automática do banco no primeiro acesso sem necessidade de botões
-  useEffect(() => {
-    dbAutoInitIfEmpty().catch(err => console.warn('Aviso na auto-inicialização:', err));
-  }, []);
-  
   const [currentStudent, setCurrentStudent] = useState<Student | null>(() => {
     const saved = localStorage.getItem('currentStudent');
     return saved ? JSON.parse(saved) : null;
@@ -110,7 +103,7 @@ const App: React.FC = () => {
   const [showStudentProfileModal, setShowStudentProfileModal] = useState(false);
   const [showStudentPasswordModal, setShowStudentPasswordModal] = useState(false);
   const [registeredStudents, setRegisteredStudents] = useState<Student[]>(() => {
-    return dedupeByKey(getCachedData<Student[]>(CACHE_KEYS.STUDENTS) || INITIAL_STUDENTS, 'matricula');
+    return dedupeByKey(getCachedData<Student[]>(CACHE_KEYS.STUDENTS) || [], 'matricula');
   });
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>(() => {
     return dedupeByKey(getCachedData<AdminUser[]>(CACHE_KEYS.ADMINS) || [], 'id');
@@ -173,65 +166,6 @@ const App: React.FC = () => {
   const schoolStudents = dedupeByKey(registeredStudents.filter(s => userRole === 'master' || !currentSchoolId || !s.schoolId || s.schoolId === currentSchoolId), 'matricula');
   const schoolVotingSessions = dedupeByKey(votingSessions.filter(v => userRole === 'master' || !currentSchoolId || !v.schoolId || v.schoolId === currentSchoolId), 'id');
 
-  // Inicialização e sincronização completa do Novo Banco de Dados (Firestore edumenu-7310d)
-  const seedInitialDataToFirestore = async (notifySuccess = false) => {
-    setIsSyncing(true);
-    try {
-      console.log("Sincronizando novas coleções e rotas no Firestore edumenu-7310d...");
-      
-      // 1. Rota de Escolas (/schools)
-      const defaultSchool: School = {
-        id: 'escola-principal',
-        name: 'Escola Estadual de Educação Básica',
-        createdAt: new Date().toISOString()
-      };
-      await setDoc(doc(db, 'schools', defaultSchool.id), defaultSchool);
-
-      // 2. Rota de Administradores (/admins)
-      const defaultAdmins: AdminUser[] = [
-        { id: 'admin-gestor', login: 'gestao', name: 'Gestão Escolar', password: '123', schoolId: 'escola-principal' },
-        { id: 'admin-diretoria', login: 'diretoria', name: 'Diretoria Geral', password: '123', schoolId: 'escola-principal' }
-      ];
-      for (const a of defaultAdmins) {
-        await setDoc(doc(db, 'admins', a.id), a);
-      }
-
-      // 3. Rota de Alunos (/students) - Todos os 35 discentes com matrículas, turmas e senhas
-      for (const st of INITIAL_STUDENTS) {
-        const studentToSave: Student = {
-          ...st,
-          schoolId: 'escola-principal',
-          turno: st.turno || 'Integral',
-          sala: st.sala || '1º Ano',
-          turma: st.turma || 'A'
-        };
-        await setDoc(doc(db, 'students', st.matricula), studentToSave);
-      }
-
-      // Mantém categorias e sessões de votação limpas no banco para serem criadas pelo gestor
-      setSchools([defaultSchool]);
-      setAdminUsers(defaultAdmins);
-      setRegisteredStudents(INITIAL_STUDENTS.map(s => ({ ...s, schoolId: 'escola-principal' })));
-
-      setCachedData(CACHE_KEYS.SCHOOLS, [defaultSchool]);
-      setCachedData(CACHE_KEYS.ADMINS, defaultAdmins);
-      setCachedData(CACHE_KEYS.STUDENTS, INITIAL_STUDENTS.map(s => ({ ...s, schoolId: 'escola-principal' })));
-
-      const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      setLastSync(nowTime);
-
-      if (notifySuccess) {
-        alert('Banco de dados "edumenu-7310d" sincronizado com sucesso! As coleções schools, admins, students, meals, voting_sessions e attendance foram populadas.');
-      }
-      return true;
-    } catch (err: any) {
-      console.error("Erro ao sincronizar coleções no Firestore:", err);
-      handleFirestoreError(err, OperationType.WRITE, 'database_init');
-      return false;
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   // Carregamento e sincronização em tempo real para o aluno com o banco de dados Firestore
   const loadStudentData = async (student: Student, forceRefresh = false) => {
@@ -359,12 +293,6 @@ const App: React.FC = () => {
 
       const [schoolsSnap, adminsSnap, mealsSnap, sessionsSnap, attendanceSnap, studentsSnap, selectionsSnap] = await Promise.all(promises);
 
-      // Se for a primeira inicialização do novo banco edumenu-7310d e estiver vazio, popula as coleções
-      if (schoolsSnap.empty && adminsSnap.empty) {
-        console.log("Detectado banco Firestore vazio. Criando coleções e populando rotas padrão...");
-        await seedInitialDataToFirestore(false);
-        return;
-      }
 
       const schoolsData: School[] = [];
       schoolsSnap.forEach((d: any) => schoolsData.push(d.data() as School));
@@ -557,7 +485,7 @@ const App: React.FC = () => {
 
   // Pré-carrega a lista de alunos em segundo plano ao abrir a tela de login para que a validação seja instantânea
   useEffect(() => {
-    if (loginStep === 'student_login' && registeredStudents.length <= INITIAL_STUDENTS.length) {
+    if (loginStep === 'student_login' && registeredStudents.length === 0) {
       getDocs(collection(db, 'students')).then(snap => {
         if (!snap.empty) {
           const list: Student[] = [];
@@ -629,8 +557,10 @@ const App: React.FC = () => {
           setError("Matrícula ou senha inválidas.");
         }
       } else if (loginStep === 'admin_login') {
-        // Login Master (0 leituras no Firestore!)
-        if (cleanId === '84040513215' && cleanPass === 'admin123') {
+        // Login Master via variáveis de ambiente configuradas com segurança
+        const masterLogin = import.meta.env.VITE_MASTER_LOGIN;
+        const masterPass = import.meta.env.VITE_MASTER_PASSWORD;
+        if (masterLogin && masterPass && cleanId === masterLogin && cleanPass === masterPass) {
           setUserRole('master');
           setView('master_admins');
           localStorage.setItem('userRole', 'master');
@@ -664,16 +594,25 @@ const App: React.FC = () => {
         }
 
         if (admin) {
-          setUserRole('admin');
-          setView('admin');
-          const schId = admin.schoolId || '';
-          if (schId) {
-            setCurrentSchoolId(schId);
-            localStorage.setItem('currentSchoolId', schId);
+          const isMaster = (admin as any).role === 'master' || admin.schoolId === 'master';
+          if (isMaster) {
+            setUserRole('master');
+            setView('master_admins');
+            localStorage.setItem('userRole', 'master');
+            localStorage.setItem('view', 'master_admins');
+            await loadAdminData(false, undefined, 'master');
+          } else {
+            setUserRole('admin');
+            setView('admin');
+            const schId = admin.schoolId || '';
+            if (schId) {
+              setCurrentSchoolId(schId);
+              localStorage.setItem('currentSchoolId', schId);
+            }
+            localStorage.setItem('userRole', 'admin');
+            localStorage.setItem('view', 'admin');
+            await loadAdminData(false, schId, 'admin');
           }
-          localStorage.setItem('userRole', 'admin');
-          localStorage.setItem('view', 'admin');
-          await loadAdminData(false, schId, 'admin');
         } else {
           setError("Login ou senha inválidos.");
         }

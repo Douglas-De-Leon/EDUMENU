@@ -17,7 +17,6 @@ import {
   AttendanceRecord, 
   Selection 
 } from '../types';
-import { INITIAL_STUDENTS, MEAL_OPTIONS, INITIAL_VOTING_SESSIONS } from '../constants';
 
 /**
  * Serviço centralizado do banco de dados Firebase Firestore (edumenu-7310d).
@@ -221,74 +220,9 @@ export async function dbFetchAllData(): Promise<AllDatabaseData> {
 }
 
 /**
- * Script de inicialização automática em segundo plano:
- * Verifica se o banco de dados está vazio e, caso esteja, popula
- * todas as informações padrão (escolas, admins, alunos, opções e votações)
- * de forma transparente, sem exibir botões ou exigir cliques do usuário.
+ * Verificação de integridade sem inserção de dados de demonstração ou PII.
+ * O sistema opera exclusivamente com dados cadastrados pelos usuários legítimos.
  */
 export async function dbAutoInitIfEmpty(): Promise<boolean> {
-  // Evita re-executar consultas de inicialização caso o banco já tenha sido verificado nesta sessão do navegador
-  if (typeof window !== 'undefined' && localStorage.getItem('edumenu_db_verified') === 'true') {
-    return false;
-  }
-
-  try {
-    const schoolsSnap = await getDocs(collection(db, 'schools'));
-    const adminsSnap = await getDocs(collection(db, 'admins'));
-
-    if (schoolsSnap.empty && adminsSnap.empty) {
-      console.log('Detectado banco vazio. Executando script de gravação inicial...');
-
-      // 1. Escola
-      const defaultSchool: School = {
-        id: 'escola-principal',
-        name: 'Escola Estadual de Educação Básica',
-        createdAt: new Date().toISOString()
-      };
-      await setDoc(doc(db, 'schools', defaultSchool.id), defaultSchool);
-
-      // 2. Admins
-      const defaultAdmins: AdminUser[] = [
-        { id: 'admin-gestor', login: 'gestao', name: 'Gestão Escolar', password: '123', schoolId: 'escola-principal' },
-        { id: 'admin-diretoria', login: 'diretoria', name: 'Diretoria Geral', password: '123', schoolId: 'escola-principal' }
-      ];
-      for (const a of defaultAdmins) {
-        await setDoc(doc(db, 'admins', a.id), a);
-      }
-
-      // 3. Alunos
-      for (const st of INITIAL_STUDENTS) {
-        await setDoc(doc(db, 'students', st.matricula), {
-          ...st,
-          schoolId: 'escola-principal',
-          turno: st.turno || 'Integral',
-          sala: st.sala || '1º Ano',
-          turma: st.turma || 'A'
-        });
-      }
-
-      // 4. Categoria padrão ALIMENTAÇÃO (deixe cadastrada essa)
-      await setDoc(doc(db, 'categories', 'alimentacao'), {
-        id: 'alimentacao',
-        name: 'ALIMENTAÇÃO',
-        createdAt: new Date().toISOString()
-      });
-
-      console.log('Banco de dados inicializado com sucesso (escolas, administradores, discentes e categoria ALIMENTAÇÃO).');
-
-      console.log('Script de gravação inicial concluído com sucesso.');
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('edumenu_db_verified', 'true');
-      }
-      return true;
-    }
-    
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('edumenu_db_verified', 'true');
-    }
-    return false;
-  } catch (err) {
-    console.warn('Aviso durante verificação automática do banco:', err);
-    return false;
-  }
+  return false;
 }

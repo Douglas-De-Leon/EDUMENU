@@ -1,8 +1,67 @@
-rules_version = "2";
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Bloqueia qualquer coleção não autorizada ou acesso genérico irrestrito
     match /{document=**} {
+      allow read, write: false;
+    }
+
+    // Ping de conexão e diagnósticos
+    match /test/{docId} {
       allow read, write: if true;
+    }
+
+    // Escolas cadastradas
+    match /schools/{schoolId} {
+      allow read: if true;
+      allow write: if request.resource.data.name is string;
+    }
+
+    // Administradores escolares e master
+    match /admins/{adminId} {
+      allow read: if true;
+      allow write: if request.resource.data.login is string;
+    }
+
+    // Estudantes e corpo discente (validação de campos obrigatórios)
+    match /students/{matricula} {
+      allow read: if true;
+      allow create, update: if request.resource.data.matricula is string 
+                            && request.resource.data.name is string;
+      allow delete: if true;
+    }
+
+    // Cardápio / Itens e opções de refeição
+    match /meals/{mealId} {
+      allow read: if true;
+      allow write: if request.resource.data.name is string;
+    }
+
+    // Sessões de votação
+    match /voting_sessions/{sessionId} {
+      allow read: if true;
+      allow write: if request.resource.data.title is string;
+    }
+
+    // Registro de votos / Cédulas de votação
+    match /selections/{selectionId} {
+      allow read: if true;
+      allow create: if request.resource.data.studentMatricula is string 
+                   && request.resource.data.sessionId is string;
+      allow update, delete: if true;
+    }
+
+    // Registros de frequência diária
+    match /attendance/{attendanceId} {
+      allow read: if true;
+      allow write: if request.resource.data.studentMatricula is string;
+    }
+
+    // Categorias de votação
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if true;
     }
   }
 }
