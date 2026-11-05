@@ -67,12 +67,21 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
     }).catch(err => console.warn('Erro ao carregar categorias:', err));
   }, []);
 
-  // Extract all available categories dynamically (NO forced standard categories!)
+  // Extract all available categories dynamically with case-insensitive normalization
   const allAvailableCategories = useMemo(() => {
-    const set = new Set<string>(customCategories.length > 0 ? customCategories : ['ALIMENTAÇÃO']);
-    votingSessions.forEach(s => s.category && set.add(s.category));
-    mealOptions.forEach(m => m.category && set.add(m.category));
-    return Array.from(set).filter(Boolean);
+    const rawList = [...(customCategories.length > 0 ? customCategories : ['ALIMENTAÇÃO'])];
+    votingSessions.forEach(s => s.category && rawList.push(s.category));
+    mealOptions.forEach(m => m.category && rawList.push(m.category));
+
+    const map = new Map<string, string>();
+    for (const c of rawList) {
+      if (!c) continue;
+      const key = c.trim().toUpperCase();
+      if (!map.has(key)) {
+        map.set(key, c.trim());
+      }
+    }
+    return Array.from(map.values());
   }, [customCategories, votingSessions, mealOptions]);
 
   // Form State
@@ -412,9 +421,9 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
     }
 
     if (filterCategory !== 'all') {
-      list = list.filter(s => s.category === filterCategory);
+      list = list.filter(s => s.category?.trim().toUpperCase() === filterCategory.trim().toUpperCase());
     }
-    return list.sort((a, b) => b.date.localeCompare(a.date));
+    return list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   }, [votingSessions, statusFilterTab, filterCategory]);
 
   const formatDateDisplay = (dateStr: string) => {
@@ -559,11 +568,11 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
         </div>
       )}
 
-      {/* Main Grid: Left = Single Unified Registration Form, Right = List of Created Votings */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      {/* Main Grid com Extensão Total da Tela: Esquerda = Formulário Único, Direita = Lista de Votações */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 w-full min-w-0">
         
         {/* FORM PANEL: Cadastro Unificado de Votação (Formulário Único) */}
-        <section className="lg:col-span-5 bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/90 shadow-sm space-y-6 h-fit lg:sticky lg:top-4">
+        <section className="xl:col-span-5 w-full min-w-0 bg-white p-5 sm:p-7 rounded-3xl border border-slate-200/90 shadow-sm space-y-6 h-fit">
           <div>
             <div className="inline-flex items-center gap-2 text-xs font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-3 py-1 rounded-full mb-2">
               <i className="fas fa-layer-group"></i> Cadastro Unificado
@@ -971,14 +980,15 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
         </section>
 
         {/* LIST PANEL: Votações Cadastradas & Reutilização para Medição em Dias Diferentes */}
-        <section className="lg:col-span-7 bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/90 shadow-sm space-y-6">
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div>
-                <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
+        <section className="xl:col-span-7 w-full min-w-0 bg-white p-5 sm:p-7 rounded-3xl border border-slate-200/90 shadow-sm space-y-5">
+          <div className="space-y-3.5">
+            {/* Header com Título e Contador de Sessões */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-2.5 border-b border-slate-100">
+              <div className="min-w-0">
+                <h3 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2 flex-wrap">
                   <i className="fas fa-calendar-check text-indigo-500"></i>
-                  Votações Cadastradas e Agendadas
-                  <span className="bg-slate-100 text-slate-600 text-xs px-2.5 py-1 rounded-full ml-2 font-mono">
+                  <span>Votações Cadastradas e Agendadas</span>
+                  <span className="bg-indigo-50 text-indigo-700 text-xs px-2.5 py-0.5 rounded-full font-mono font-bold">
                     {filteredSessions.length} de {votingSessions.length}
                   </span>
                 </h3>
@@ -986,34 +996,48 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
                   Votações abertas, agendadas e controle de bloqueio por horário e data
                 </p>
               </div>
+            </div>
 
-              {/* Category Filter */}
-              <div className="flex flex-wrap gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setFilterCategory('all')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                    filterCategory === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  Todas Cats ({votingSessions.length})
-                </button>
-                {allAvailableCategories.slice(0, 4).map(cat => {
-                  const count = votingSessions.filter(s => s.category === cat).length;
-                  return (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setFilterCategory(cat)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                        filterCategory === cat ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                      }`}
-                    >
-                      {cat.substring(0, 6)} ({count})
-                    </button>
-                  );
-                })}
-              </div>
+            {/* Filtro de Categorias em Linha Própria com Extensão Total */}
+            <div className="w-full flex flex-wrap items-center gap-1.5 p-1.5 bg-slate-50 rounded-2xl border border-slate-200">
+              <span className="text-[11px] font-black text-slate-400 px-2 uppercase tracking-wider shrink-0 flex items-center gap-1">
+                <i className="fas fa-filter text-[10px]"></i>
+                <span>Categoria:</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setFilterCategory('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  filterCategory === 'all' 
+                    ? 'bg-indigo-600 text-white shadow-xs font-black' 
+                    : 'text-slate-600 hover:text-slate-800 hover:bg-slate-200/60'
+                }`}
+              >
+                Todas ({votingSessions.length})
+              </button>
+              {allAvailableCategories.map(cat => {
+                const count = votingSessions.filter(s => s.category?.trim().toUpperCase() === cat.trim().toUpperCase()).length;
+                const isSelected = filterCategory.trim().toUpperCase() === cat.trim().toUpperCase();
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setFilterCategory(isSelected ? 'all' : cat)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                      isSelected 
+                        ? 'bg-indigo-600 text-white shadow-xs font-black' 
+                        : 'text-slate-600 hover:text-slate-800 hover:bg-slate-200/60'
+                    }`}
+                  >
+                    <span>{getCategoryLabel(cat)}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                      isSelected ? 'bg-indigo-700 text-white font-bold' : 'bg-slate-200 text-slate-700'
+                    }`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* STATUS FILTER TABS: Votações Ativas, Agendadas e VOTAÇÕES FINALIZADAS */}
@@ -1093,19 +1117,19 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
                 return (
                   <div
                     key={session.id}
-                    className={`p-5 rounded-2xl border transition-all ${
+                    className={`w-full min-w-0 p-5 rounded-3xl border transition-all shadow-xs ${
                       timing.isFinalized
                         ? 'bg-slate-100/70 border-slate-300 opacity-90'
                         : session.active 
-                          ? 'bg-slate-50/70 border-slate-200 hover:border-indigo-300' 
+                          ? 'bg-slate-50/70 border-slate-200/90 hover:border-indigo-300' 
                           : 'bg-slate-100/50 border-slate-200 opacity-75'
                     }`}
                   >
-                    <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 pb-3 border-b border-slate-200/60">
-                      <div className="space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-col md:flex-row justify-between items-start gap-4 pb-3.5 border-b border-slate-200/70 w-full min-w-0">
+                      <div className="space-y-1.5 flex-1 min-w-0 w-full">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <span
-                            className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full text-white"
+                            className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full text-white tracking-wide shrink-0"
                             style={{ backgroundColor: getCategoryThemeColor(session.category) }}
                           >
                             {getCategoryLabel(session.category)}
@@ -1113,62 +1137,68 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
                           
                           {/* Timing / Finalized Status Badge */}
                           {timing.isPastDay ? (
-                            <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-md bg-slate-200 text-slate-700 flex items-center gap-1 font-bold">
+                            <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-md bg-slate-200 text-slate-700 flex items-center gap-1 font-bold shrink-0">
                               <i className="fas fa-flag-checkered"></i> Votação Finalizada (Dia Encerrado)
                             </span>
                           ) : timing.isTimeExpired ? (
-                            <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-1 font-bold">
+                            <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-200 flex items-center gap-1 font-bold shrink-0">
                               <i className="fas fa-lock"></i> Bloqueada no Horário ({session.closingTime})
                             </span>
                           ) : !session.active ? (
-                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-slate-200 text-slate-600">
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-slate-200 text-slate-600 shrink-0">
                               ○ Suspensa
                             </span>
                           ) : timing.isToday ? (
-                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 flex items-center gap-1 shrink-0 font-bold">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-ping"></span>
                               Aberta para Voto {session.closingTime ? `(até ${session.closingTime})` : ''}
                             </span>
                           ) : (
-                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-blue-100 text-blue-800">
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 shrink-0">
                               📅 Agendada
                             </span>
                           )}
 
                           {timing.isToday && !timing.isFinalized && (
-                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 animate-pulse">
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 animate-pulse shrink-0">
                               ★ Votação do Dia
                             </span>
                           )}
 
                           {session.closingTime && !timing.isPastDay && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-mono">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-mono shrink-0">
                               <i className="fas fa-clock text-[9px] mr-1"></i>
                               Bloqueio: {session.closingTime}
                             </span>
                           )}
 
                           {session.parentSessionId && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0">
                               <i className="fas fa-link text-[9px] mr-1"></i> Medição Recorrente
                             </span>
                           )}
                         </div>
 
-                        <h4 className="text-base font-extrabold text-slate-800">{session.title}</h4>
+                        <h4 className="text-base sm:text-lg font-black text-slate-900 break-words leading-snug">
+                          {session.title}
+                        </h4>
                         {session.description && (
-                          <p className="text-xs text-slate-500 line-clamp-2">{session.description}</p>
+                          <p className="text-xs text-slate-600 break-words leading-relaxed">
+                            {session.description}
+                          </p>
                         )}
                       </div>
 
                       {/* Date & Time Badge */}
-                      <div className="sm:text-right shrink-0 bg-white/80 p-2.5 rounded-xl border border-slate-200/80">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Data & Bloqueio</span>
-                        <span className="text-sm font-black text-slate-800 flex items-center sm:justify-end gap-1.5 font-mono">
-                          <i className="far fa-calendar-alt text-indigo-500"></i>
-                          {formatDateDisplay(session.date)}
-                        </span>
-                        <span className="text-[11px] font-semibold text-slate-500 flex items-center sm:justify-end gap-1 mt-0.5 font-mono">
+                      <div className="md:text-right shrink-0 bg-white p-3 rounded-2xl border border-slate-200/90 shadow-2xs min-w-[150px] self-stretch md:self-auto flex md:flex-col justify-between md:justify-center items-center md:items-end">
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Data & Bloqueio</span>
+                          <span className="text-sm font-black text-slate-800 flex items-center md:justify-end gap-1.5 font-mono">
+                            <i className="far fa-calendar-alt text-indigo-500"></i>
+                            {formatDateDisplay(session.date)}
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-semibold text-slate-500 flex items-center md:justify-end gap-1 mt-0.5 font-mono">
                           <i className="far fa-clock text-slate-400"></i>
                           {session.closingTime ? `Bloqueio às ${session.closingTime}` : 'Até o fim do dia'}
                         </span>
@@ -1178,7 +1208,7 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
                     {/* Participating Options */}
                     <div className="pt-3">
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">
                           Itens / Opções na Cédula ({includedOptions.length}):
                         </span>
                       </div>
@@ -1187,16 +1217,16 @@ export const VotingManagement: React.FC<VotingManagementProps> = ({
                         {includedOptions.map(opt => (
                           <span
                             key={opt.id}
-                            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-xl border ${
+                            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl border max-w-full break-words ${
                               opt.active 
                                 ? 'bg-white text-slate-700 border-slate-200 shadow-2xs' 
                                 : 'bg-slate-200/70 text-slate-500 border-slate-300'
                             }`}
                           >
-                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: getCategoryThemeColor(opt.category) }}></span>
-                            <span>{opt.name}</span>
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: getCategoryThemeColor(opt.category) }}></span>
+                            <span className="break-words">{opt.name}</span>
                             {opt.calories && (
-                              <span className="text-[10px] text-slate-400 font-mono">({opt.calories})</span>
+                              <span className="text-[10px] text-slate-400 font-mono shrink-0">({opt.calories})</span>
                             )}
                           </span>
                         ))}

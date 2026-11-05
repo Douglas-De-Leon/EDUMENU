@@ -1056,22 +1056,41 @@ const App: React.FC = () => {
     if (loginStep === 'landing') {
       return (
         <div className="min-h-screen flex flex-col bg-slate-50">
-          <header className="bg-slate-950 text-white shadow-md sticky top-0 z-50 border-b border-slate-800">
-            <div className="max-w-7xl mx-auto px-6 py-3.5 flex justify-between items-center">
+          <header className="bg-slate-950 text-white shadow-md sticky top-0 z-50 border-b border-slate-800 w-full backdrop-blur-md bg-opacity-95">
+            <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-3.5 flex justify-between items-center gap-4">
               <div className="flex items-center space-x-2.5">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500 text-slate-950 flex items-center justify-center font-black text-sm">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500 text-slate-950 flex items-center justify-center font-black text-sm shadow-sm shadow-emerald-500/20">
                   <i className="fas fa-check-to-slot"></i>
                 </div>
                 <div>
                   <h1 className="text-base font-black tracking-tight leading-none text-white">EDUVOTAÇÃO</h1>
-                  <span className="text-[10px] text-emerald-400 font-semibold">Merenda & Gestão Inteligente</span>
+                  <span className="text-[10px] text-emerald-400 font-semibold tracking-wide">Merenda & Gestão Inteligente</span>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+
+              {/* Links de Navegação */}
+              <nav className="hidden lg:flex items-center gap-6 text-xs font-semibold text-slate-300">
+                <a href="#beneficios" className="hover:text-emerald-400 transition-colors">Benefícios</a>
+                <a href="#demonstracao" className="hover:text-emerald-400 transition-colors">Demonstração Interativa</a>
+                <a href="#funcionalidades" className="hover:text-emerald-400 transition-colors">Funcionalidades</a>
+                <a href="#calculadora" className="hover:text-emerald-400 transition-colors">Calculadora PNAE</a>
+                <a href="#faq" className="hover:text-emerald-400 transition-colors">FAQ</a>
+              </nav>
+
+              <div className="flex items-center gap-2 sm:gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => handleRoleSelect('student')}
+                  className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-indigo-900/70 hover:bg-indigo-800 text-indigo-200 border border-indigo-700/60 transition-all text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <i className="fas fa-user-graduate text-indigo-400 text-xs"></i>
+                  <span className="hidden sm:inline">Portal do Aluno</span>
+                  <span className="sm:hidden">Aluno</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => setLoginStep('role_selection')}
-                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer"
+                  className="px-3.5 py-1.5 sm:px-4 sm:py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer"
                 >
                   <span>Entrar no Sistema</span>
                   <i className="fas fa-arrow-right text-[10px]"></i>
@@ -1272,10 +1291,10 @@ const App: React.FC = () => {
     <Layout
       userRole={userRole}
     >
-      <div className="max-w-7xl mx-auto space-y-8 animate-fadeIn pb-20">
+      <div className="w-full space-y-6 animate-fadeIn pb-20 min-w-0">
         
         {/* Header with Role Info and Logout */}
-        <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100 gap-4">
+        <div className="w-full flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 gap-4 min-w-0">
           <div className="flex items-center gap-3 w-full sm:w-auto">
              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${userRole === 'student' ? 'bg-indigo-100 text-indigo-600' : userRole === 'master' ? 'bg-purple-100 text-purple-600' : 'bg-amber-100 text-amber-600'}`}>
                 <i className={`fas ${userRole === 'student' ? 'fa-user-graduate' : userRole === 'master' ? 'fa-crown' : 'fa-user-shield'}`}></i>

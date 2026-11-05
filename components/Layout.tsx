@@ -17,9 +17,9 @@ export const Layout: React.FC<LayoutProps> = ({
   lastSyncTime
 }) => {
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="bg-indigo-600 text-white shadow-lg sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-3 sm:py-4 flex justify-between items-center gap-3">
+    <div className="min-h-screen flex flex-col w-full">
+      <header className="bg-indigo-600 text-white shadow-lg sticky top-0 z-50 w-full">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-3 sm:py-4 flex justify-between items-center gap-3">
           <div className="flex items-center space-x-2">
             <i className="fas fa-ticket-alt text-2xl rotate-[-15deg] inline-block text-amber-300"></i>
             <span className="text-xl font-black tracking-tight">EDUVOTAÇÃO</span>
@@ -39,12 +39,12 @@ export const Layout: React.FC<LayoutProps> = ({
         </div>
       </header>
 
-      <main className="flex-grow container mx-auto px-4 py-8">
+      <main className="flex-grow w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-6 sm:py-8">
         {children}
       </main>
 
-      <footer className="bg-white border-t border-slate-200 py-6">
-        <div className="container mx-auto px-4 text-center text-slate-500 text-sm">
+      <footer className="bg-white border-t border-slate-200 py-6 w-full">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 text-center text-slate-500 text-sm">
           &copy; {new Date().getFullYear()} EDUVOTAÇÃO. Portal de Decisão e Participação Escolar.
         </div>
       </footer>

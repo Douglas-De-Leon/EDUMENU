@@ -103,7 +103,7 @@ export const MasterDashboard: React.FC<MasterDashboardProps> = ({
   };
 
   return (
-    <div className="space-y-8 animate-fadeIn max-w-5xl mx-auto">
+    <div className="space-y-8 animate-fadeIn w-full">
       <div className="flex space-x-2 border-b border-slate-200 mb-6">
         <button
           onClick={() => setActiveTab('schools')}

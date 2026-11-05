@@ -349,7 +349,7 @@ export const IntelligentVotingDashboard: React.FC<IntelligentVotingDashboardProp
   };
 
   return (
-    <div className="space-y-8 animate-fadeIn">
+    <div className="w-full space-y-6 animate-fadeIn min-w-0">
       {/* Top Header Card */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-8 rounded-3xl shadow-xl relative overflow-hidden border border-slate-800">
         <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>

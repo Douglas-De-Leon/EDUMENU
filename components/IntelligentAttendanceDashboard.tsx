@@ -251,7 +251,7 @@ export const IntelligentAttendanceDashboard: React.FC<IntelligentAttendanceDashb
   }, [attendanceBySerieData]);
 
   return (
-    <div className="space-y-8 animate-fadeIn">
+    <div className="w-full space-y-6 animate-fadeIn min-w-0">
       {/* Top Header Card */}
       <div className="bg-gradient-to-r from-emerald-950 via-teal-900 to-slate-900 text-white p-6 sm:p-8 rounded-3xl shadow-xl relative overflow-hidden border border-emerald-800">
         <div className="absolute right-0 top-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>

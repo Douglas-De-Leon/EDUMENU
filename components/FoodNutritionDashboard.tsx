@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { MealOption, VotingSession, Student, AttendanceRecord } from '../types';
-import { dbSyncNutritionUpdate } from '../services/databaseService';
 
 interface FoodNutritionDashboardProps {
   students: Student[];
@@ -10,7 +9,6 @@ interface FoodNutritionDashboardProps {
   onAddMeal: (meal: MealOption) => void;
   onAddVotingSession?: (session: VotingSession) => void;
   currentSchoolId?: string | null;
-  onRefreshData?: () => void;
 }
 
 // 1. Tipos de Carnes Pré-definidos com Perfil Nutricional Técnico (baseado em TACO/PNAE)
@@ -183,27 +181,6 @@ export const FoodNutritionDashboard: React.FC<FoodNutritionDashboardProps> = ({
   const [selectedFruitId, setSelectedFruitId] = useState<string>('fruta-laranja');
   const [activeSubTab, setActiveSubTab] = useState<'cedulas' | 'prato_balanceado' | 'simulador'>('cedulas');
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
-  const [isSyncingDb, setIsSyncingDb] = useState(false);
-  const [lastDbSync, setLastDbSync] = useState<string | null>(null);
-
-  const handleSyncDatabaseWithUpdate = async () => {
-    setIsSyncingDb(true);
-    try {
-      const res = await dbSyncNutritionUpdate(currentSchoolId);
-      if (res.success) {
-        setLastDbSync(res.timestamp);
-        showFeedback('Banco de dados Firestore atualizado com sucesso! Categoria ALIMENTAÇÃO, 4 Cédulas de Carnes e Votação gravadas.');
-        if (onRefreshData) {
-          onRefreshData();
-        }
-      }
-    } catch (err: any) {
-      console.error('Erro ao sincronizar banco de dados:', err);
-      showFeedback(`Erro ao atualizar banco: ${err.message || 'Falha de conexão'}`);
-    } finally {
-      setIsSyncingDb(false);
-    }
-  };
 
   // Objetos selecionados atualmente
   const currentMeat = useMemo(() => MEAT_TYPES.find(m => m.id === selectedMeatId)!, [selectedMeatId]);
@@ -347,7 +324,7 @@ export const FoodNutritionDashboard: React.FC<FoodNutritionDashboardProps> = ({
   };
 
   return (
-    <div className="space-y-6 animate-fadeIn pb-12">
+    <div className="w-full space-y-6 animate-fadeIn min-w-0 pb-12">
       {/* Toast de Feedback */}
       {feedbackMessage && (
         <div className="fixed top-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-xl flex items-center gap-3 font-semibold text-sm animate-bounce">
@@ -382,40 +359,21 @@ export const FoodNutritionDashboard: React.FC<FoodNutritionDashboardProps> = ({
             </p>
           </div>
 
-          {/* Card Rápido de Presença Escolar Hoje & Sincronização do Banco */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 flex items-center gap-4 min-w-[220px]">
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-white text-xl shadow-inner">
-                <i className="fas fa-user-check"></i>
-              </div>
-              <div>
-                <div className="text-[11px] font-bold text-orange-200 uppercase tracking-wide">
-                  Frequência Confirmada Hoje
-                </div>
-                <div className="text-2xl font-black text-white">
-                  {attendanceToday} <span className="text-xs font-medium text-orange-200">alunos presentes</span>
-                </div>
-                <div className="text-[10px] text-white/80">
-                  {students.length} estudantes matriculados
-                </div>
-              </div>
+          {/* Card Rápido de Presença Escolar Hoje */}
+          <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 flex items-center gap-4 min-w-[240px]">
+            <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-white text-xl shadow-inner">
+              <i className="fas fa-user-check"></i>
             </div>
-
-            <div className="flex flex-col gap-1.5 justify-center">
-              <button
-                type="button"
-                onClick={handleSyncDatabaseWithUpdate}
-                disabled={isSyncingDb}
-                className="px-4 py-3 bg-white text-orange-700 hover:bg-orange-50 font-black text-xs sm:text-sm rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 border border-white/40 disabled:opacity-60 active:scale-95 cursor-pointer"
-              >
-                <i className={`fas fa-cloud-arrow-up ${isSyncingDb ? 'animate-spin' : ''}`}></i>
-                <span>{isSyncingDb ? 'Atualizando Banco...' : 'Atualizar Banco de Dados'}</span>
-              </button>
-              {lastDbSync && (
-                <div className="text-[10px] text-white/90 text-center font-mono font-medium">
-                  Última sinc.: {lastDbSync}
-                </div>
-              )}
+            <div>
+              <div className="text-[11px] font-bold text-orange-200 uppercase tracking-wide">
+                Frequência Confirmada Hoje
+              </div>
+              <div className="text-2xl font-black text-white">
+                {attendanceToday} <span className="text-xs font-medium text-orange-200">alunos presentes</span>
+              </div>
+              <div className="text-[10px] text-white/80">
+                {students.length} estudantes matriculados
+              </div>
             </div>
           </div>
         </div>

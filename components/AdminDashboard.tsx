@@ -53,24 +53,42 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const totalRegisteredStudents = students.length;
 
   return (
-    <div className="space-y-8 animate-fadeIn">
-      {/* Barra de Navegação Exclusiva das Abas Oficiais */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-slate-50 p-2 rounded-2xl border border-slate-200/60 shadow-inner">
-        <div className="flex flex-wrap gap-2 w-full lg:w-auto">
+    <div className="w-full space-y-6 animate-fadeIn min-w-0">
+      {/* Barra Superior com Extensão Total da Tela */}
+      <div className="w-full bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-sm space-y-3">
+        {/* Linha de Título e Quórum Integrado */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-2.5 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
+            <span className="text-xs font-black text-slate-700 uppercase tracking-wider">
+              Painel Integrado de Decisão & Gestão Escolar
+            </span>
+          </div>
+
+          <div className="text-xs font-bold text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 flex items-center gap-2 font-mono tabular-nums shadow-2xs self-stretch sm:self-auto justify-center sm:justify-start">
+            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping shrink-0"></span>
+            <span className="truncate">{totalGlobalVotes} votos apurados / {totalRegisteredStudents} discentes</span>
+          </div>
+        </div>
+
+        {/* 4 Abas Oficiais com Extensão Total Perfeitamente Enquadradas */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 w-full">
           {/* Aba 1: Criar Votação */}
           <button
             type="button"
             onClick={() => setActiveTab('criar_votacao')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+            className={`w-full min-w-0 flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
               activeTab === 'criar_votacao'
-                ? 'bg-white shadow-sm text-indigo-700 font-black ring-1 ring-slate-200'
-                : 'text-slate-600 hover:text-slate-800'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20 font-black ring-2 ring-indigo-600/30'
+                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/70'
             }`}
           >
-            <i className="fas fa-calendar-plus text-indigo-600"></i>
-            <span>Criar Votação</span>
+            <i className="fas fa-calendar-plus shrink-0"></i>
+            <span className="truncate">Criar Votação</span>
             {votingSessions.length > 0 && (
-              <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-bold">
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-black shrink-0 ${
+                activeTab === 'criar_votacao' ? 'bg-white text-indigo-700' : 'bg-indigo-100 text-indigo-700'
+              }`}>
                 {votingSessions.length}
               </span>
             )}
@@ -80,52 +98,48 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('dashboard_votacoes')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+            className={`w-full min-w-0 flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
               activeTab === 'dashboard_votacoes'
-                ? 'bg-white shadow-sm text-indigo-700 font-black ring-1 ring-slate-200'
-                : 'text-slate-600 hover:text-slate-800'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20 font-black ring-2 ring-indigo-600/30'
+                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/70'
             }`}
           >
-            <i className="fas fa-chart-pie text-indigo-600"></i>
-            <span>Dashboard Inteligente de Votações</span>
+            <i className="fas fa-chart-pie shrink-0"></i>
+            <span className="truncate">Dashboard de Votações</span>
           </button>
 
           {/* Aba 3: Dashboard Inteligente de Frequências */}
           <button
             type="button"
             onClick={() => setActiveTab('dashboard_frequencias')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+            className={`w-full min-w-0 flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
               activeTab === 'dashboard_frequencias'
-                ? 'bg-white shadow-sm text-emerald-700 font-black ring-1 ring-slate-200'
-                : 'text-slate-600 hover:text-slate-800'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20 font-black ring-2 ring-emerald-600/30'
+                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/70'
             }`}
           >
-            <i className="fas fa-user-check text-emerald-600"></i>
-            <span>Dashboard Inteligente de Frequências</span>
+            <i className="fas fa-user-check shrink-0"></i>
+            <span className="truncate">Dashboard de Frequências</span>
           </button>
 
           {/* Aba 4: Dashboard de Alimentação */}
           <button
             type="button"
             onClick={() => setActiveTab('dashboard_alimentacao')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+            className={`w-full min-w-0 flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
               activeTab === 'dashboard_alimentacao'
-                ? 'bg-white shadow-sm text-orange-700 font-black ring-1 ring-slate-200'
-                : 'text-slate-600 hover:text-slate-800'
+                ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20 font-black ring-2 ring-orange-600/30'
+                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/70'
             }`}
           >
-            <i className="fas fa-utensils text-orange-600"></i>
-            <span>Dashboard de Alimentação</span>
-            <span className="text-[10px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-bold">
+            <i className="fas fa-utensils shrink-0"></i>
+            <span className="truncate">Dashboard de Alimentação</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-black uppercase tracking-wider shrink-0 ${
+              activeTab === 'dashboard_alimentacao' ? 'bg-white text-orange-700' : 'bg-orange-100 text-orange-800'
+            }`}>
               Nutrição
             </span>
           </button>
-        </div>
-
-        {/* Status rápido de quórum */}
-        <div className="text-xs font-bold text-slate-500 bg-white px-3 py-1.5 rounded-lg border border-slate-200 flex items-center gap-2 self-end lg:self-auto font-mono tabular-nums shadow-2xs">
-          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span>
-          <span>{totalGlobalVotes} votos apurados / {totalRegisteredStudents} estudantes</span>
         </div>
       </div>
 
@@ -178,7 +192,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           onAddMeal={onAddMeal}
           onAddVotingSession={onAddVotingSession}
           currentSchoolId={currentSchoolId}
-          onRefreshData={onSyncDatabase}
         />
       )}
     </div>
